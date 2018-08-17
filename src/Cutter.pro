@@ -320,7 +320,8 @@ HEADERS  += \
     common/ColorSchemeFileSaver.h \
     widgets/ColorSchemePrefWidget.h \
     dialogs/EditFunctionDialog.h \
-    widgets/CutterTreeView.h
+    widgets/CutterTreeView.h \
+    common/Json.h
 
 FORMS    += \
     dialogs/AboutDialog.ui \
