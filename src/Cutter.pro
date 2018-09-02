@@ -218,7 +218,8 @@ SOURCES += \
     widgets/ColorSchemePrefWidget.cpp \
     common/ColorSchemeFileSaver.cpp \
     dialogs/EditFunctionDialog.cpp \
-    widgets/CutterTreeView.cpp
+    widgets/CutterTreeView.cpp \
+    dialogs/EditMethodDialog.cpp
 
 HEADERS  += \
     Cutter.h \
@@ -321,7 +322,8 @@ HEADERS  += \
     widgets/ColorSchemePrefWidget.h \
     dialogs/EditFunctionDialog.h \
     widgets/CutterTreeView.h \
-    common/Json.h
+    common/Json.h \
+    dialogs/EditMethodDialog.h
 
 FORMS    += \
     dialogs/AboutDialog.ui \
@@ -379,7 +381,8 @@ FORMS    += \
     dialogs/SetToDataDialog.ui \
     dialogs/SetFunctionVarTypes.ui \
     widgets/ColorSchemePrefWidget.ui \
-    widgets/CutterTreeView.ui
+    widgets/CutterTreeView.ui \
+    dialogs/EditMethodDialog.ui
 
 RESOURCES += \
     resources.qrc \

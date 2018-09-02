@@ -440,6 +440,10 @@ public:
     void setImmediateBase(const QString &r2BaseName, RVA offset = RVA_INVALID);
     void setCurrentBits(int bits, RVA offset = RVA_INVALID);
 
+    /* Classes */
+    void setClassMethod(const QString &className, const ClassMethodDescription &meth);
+    void renameClassMethod(const QString &className, const QString &oldMethodName, const QString &newMethodName);
+
     /* File related methods */
     bool loadFile(QString path, ut64 baddr = 0LL, ut64 mapaddr = 0LL, int perms = R_PERM_R,
                   int va = 0, bool loadbin = false, const QString &forceBinPlugin = nullptr);
@@ -475,6 +479,8 @@ public:
 
     /* Math functions */
     ut64 math(const QString &expr);
+    ut64 num(const QString &expr);
+    QString itoa(ut64 num, int rdx = 16);
 
     /* Config functions */
     void setConfig(const QString &k, const QString &v);
@@ -631,6 +637,7 @@ signals:
     void functionsChanged();
     void flagsChanged();
     void commentsChanged();
+    void classesChanged();
     void registersChanged();
     void instructionChanged(RVA offset);
     void breakpointsChanged();
