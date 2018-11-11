@@ -259,6 +259,8 @@ ClassesWidget::ClassesWidget(MainWindow *main, QAction *action) :
     ui->classesTreeView->sortByColumn(ClassesModel::TYPE, Qt::AscendingOrder);
     ui->classesTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
 
+    ui->classSourceCombo->setCurrentIndex(2);
+
     connect(Core(), SIGNAL(refreshAll()), this, SLOT(refreshClasses()));
     connect(Core(), &CutterCore::flagsChanged, this, [this]() {
         if (getSource() == Source::FLAGS) {
