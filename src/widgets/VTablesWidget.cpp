@@ -1,7 +1,7 @@
 #include <QShortcut>
 #include <QModelIndex>
 
-#include "MainWindow.h"
+#include "core/MainWindow.h"
 #include "common/Helpers.h"
 
 #include "VTablesWidget.h"
@@ -39,7 +39,7 @@ QVariant VTableModel::data(const QModelIndex &index, int role) const
 {
     QModelIndex parent = index.parent();
     if (parent.isValid()) {
-        const ClassMethodDescription &res = vtables->at(parent.row()).methods.at(index.row());
+        const BinClassMethodDescription &res = vtables->at(parent.row()).methods.at(index.row());
         switch (role) {
         case Qt::DisplayRole:
             switch (index.column()) {
@@ -138,7 +138,7 @@ VTablesWidget::VTablesWidget(MainWindow *main, QAction *action) :
     tree->addStatusBar(ui->verticalLayout);
 
     model = new VTableModel(&vtables, this);
-    proxy = new VTableSortFilterProxyModel(model);
+    proxy = new VTableSortFilterProxyModel(model, this);
 
     ui->vTableTreeView->setModel(proxy);
     ui->vTableTreeView->sortByColumn(VTableModel::ADDRESS, Qt::AscendingOrder);
@@ -146,6 +146,7 @@ VTablesWidget::VTablesWidget(MainWindow *main, QAction *action) :
     // Esc to clear the filter entry
     QShortcut *clear_shortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
     connect(clear_shortcut, &QShortcut::activated, ui->quickFilterView, &QuickFilterView::clearFilter);
+    clear_shortcut->setContext(Qt::WidgetWithChildrenShortcut);
 
     // Ctrl-F to show/hide the filter entry
     QShortcut *search_shortcut = new QShortcut(QKeySequence::Find, this);
@@ -160,7 +161,8 @@ VTablesWidget::VTablesWidget(MainWindow *main, QAction *action) :
         tree->showItemsNumber(proxy->rowCount());
     });
     
-    connect(Core(), SIGNAL(refreshAll()), this, SLOT(refreshVTables()));
+    connect(Core(), &CutterCore::codeRebased, this, &VTablesWidget::refreshVTables);
+    connect(Core(), &CutterCore::refreshAll, this, &VTablesWidget::refreshVTables);
 }
 
 VTablesWidget::~VTablesWidget()
@@ -188,10 +190,10 @@ void VTablesWidget::on_vTableTreeView_doubleClicked(const QModelIndex &index)
 
     QModelIndex parent = index.parent();
     if (parent.isValid()) {
-        Core()->seek(index.data(
-                         VTableModel::VTableDescriptionRole).value<ClassMethodDescription>().addr);
+        Core()->seekAndShow(index.data(
+                         VTableModel::VTableDescriptionRole).value<BinClassMethodDescription>().addr);
     } else {
-        Core()->seek(index.data(
+        Core()->seekAndShow(index.data(
                          VTableModel::VTableDescriptionRole).value<VTableDescription>().addr);
     }
 }

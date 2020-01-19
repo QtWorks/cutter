@@ -1,7 +1,7 @@
 #ifndef DISASSEMBLYCONTEXTMENU_H
 #define DISASSEMBLYCONTEXTMENU_H
 
-#include "Cutter.h"
+#include "core/Cutter.h"
 #include <QMenu>
 #include <QKeySequence>
 
@@ -10,7 +10,7 @@ class DisassemblyContextMenu : public QMenu
     Q_OBJECT
 
 public:
-    DisassemblyContextMenu(QWidget *parent = nullptr);
+    DisassemblyContextMenu(QWidget *parent, MainWindow *mainWindow);
     ~DisassemblyContextMenu();
 
 signals:
@@ -19,6 +19,12 @@ signals:
 public slots:
     void setOffset(RVA offset);
     void setCanCopy(bool enabled);
+
+    /**
+     * @brief Sets the value of curHighlightedWord
+     * @param text The current highlighted word
+     */
+    void setCurHighlightedWord(const QString &text);
 
 private slots:
     void aboutToShowSlot();
@@ -47,17 +53,36 @@ private slots:
     void on_actionDeleteFunction_triggered();
 
     void on_actionAddBreakpoint_triggered();
+    void on_actionAdvancedBreakpoint_triggered();
     void on_actionContinueUntil_triggered();
     void on_actionSetPC_triggered();
 
     void on_actionSetToCode_triggered();
     void on_actionSetAsString_triggered();
+    void on_actionSetAsStringRemove_triggered();
+    void on_actionSetAsStringAdvanced_triggered();
     void on_actionSetToData_triggered();
     void on_actionSetToDataEx_triggered();
+
+    /**
+     * @brief Executed on selecting an offset from the structureOffsetMenu
+     * Uses the applyStructureOffset() function of CutterCore to apply the
+     * structure offset
+     * \param action The action which trigered the event
+     */
+    void on_actionStructureOffsetMenu_triggered(QAction *action);
+
+    /**
+     * @brief Executed on selecting the "Link Type to Address" option
+     * Opens the LinkTypeDialog box from where the user can link the address
+     * to a type
+     */
+    void on_actionLinkType_triggered();
 
 private:
     QKeySequence getCopySequence() const;
     QKeySequence getCommentSequence() const;
+    QKeySequence getCopyAddressSequence() const;
     QKeySequence getSetToCodeSequence() const;
     QKeySequence getSetAsStringSequence() const;
     QKeySequence getSetToDataSequence() const;
@@ -68,10 +93,21 @@ private:
     QKeySequence getRetypeSequence() const;
     QKeySequence getXRefSequence() const;
     QKeySequence getDisplayOptionsSequence() const;
+    QKeySequence getDefineNewFunctionSequence() const;
+    QKeySequence getUndefineFunctionSequence() const;
+    QKeySequence getEditFunctionSequence() const;
     QList<QKeySequence> getAddBPSequence() const;
+
+    /**
+     * @return the shortcut key for "Link Type to Address" option
+     */
+    QKeySequence getLinkTypeSequence() const;
+
 
     RVA offset;
     bool canCopy;
+    QString curHighlightedWord; // The current highlighted word
+    MainWindow *mainWindow;
 
     QList<QAction *> anonymousActions;
 
@@ -100,6 +136,10 @@ private:
     QAction actionDeleteFlag;
     QAction actionDeleteFunction;
 
+    QMenu *structureOffsetMenu;
+
+    QAction actionLinkType;
+
     QMenu *setBaseMenu;
     QAction actionSetBaseBinary;
     QAction actionSetBaseOctal;
@@ -118,17 +158,26 @@ private:
     QMenu *debugMenu;
     QAction actionContinueUntil;
     QAction actionAddBreakpoint;
+    QAction actionAdvancedBreakpoint;
     QAction actionSetPC;
 
     QAction actionSetToCode;
-    QAction actionSetAsString;
+
+    QAction actionSetAsStringAuto;
+    QAction actionSetAsStringRemove;
+    QAction actionSetAsStringAdvanced;
 
     QMenu *setToDataMenu;
+    QMenu *setAsMenu;
+    QMenu *setAsString;
     QAction actionSetToDataEx;
     QAction actionSetToDataByte;
     QAction actionSetToDataWord;
     QAction actionSetToDataDword;
     QAction actionSetToDataQword;
+
+    QAction showInSubmenu;
+    QList<QAction*> showTargetMenuActions;
 
     // For creating anonymous entries (that are always visible)
     QAction *addAnonymousAction(QString name, const char *slot, QKeySequence shortcut);
@@ -143,8 +192,24 @@ private:
 
     void addSetBaseMenu();
     void addSetBitsMenu();
+    void addSetAsMenu();
     void addSetToDataMenu();
     void addEditMenu();
     void addDebugMenu();
+
+    struct ThingUsedHere {
+        QString name;
+        RVA offset;
+        enum class Type {
+            Var,
+            Function,
+            Flag,
+            Address
+        };
+        Type type;
+    };
+    QVector<ThingUsedHere> getThingUsedHere(RVA offset);
+
+    void updateTargetMenuActions(const QVector<ThingUsedHere> &targets);
 };
 #endif // DISASSEMBLYCONTEXTMENU_H

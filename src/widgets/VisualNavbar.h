@@ -4,7 +4,7 @@
 #include <QToolBar>
 #include <QGraphicsScene>
 
-#include "Cutter.h"
+#include "core/Cutter.h"
 
 class MainWindow;
 class QGraphicsView;
@@ -30,13 +30,16 @@ public slots:
 private slots:
     void fetchAndPaintData();
     void fetchStats();
-    void drawCursor();
+    void drawSeekCursor();
+    void drawPCCursor();
+    void drawCursor(RVA addr, QColor color, QGraphicsRectItem *&graphicsItem);
     void on_seekChanged(RVA addr);
 
 private:
     QGraphicsView     *graphicsView;
     QGraphicsScene    *graphicsScene;
-    QGraphicsRectItem *cursorGraphicsItem;
+    QGraphicsRectItem *seekGraphicsItem;
+    QGraphicsRectItem *PCGraphicsItem;
     MainWindow        *main;
 
     BlockStatistics    stats;

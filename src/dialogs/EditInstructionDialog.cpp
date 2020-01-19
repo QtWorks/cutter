@@ -1,13 +1,15 @@
 #include "EditInstructionDialog.h"
 #include "ui_EditInstructionDialog.h"
-#include "Cutter.h"
+#include "core/Cutter.h"
 
-EditInstructionDialog::EditInstructionDialog(QWidget *parent, InstructionEditMode editMode) :
+EditInstructionDialog::EditInstructionDialog(InstructionEditMode editMode, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::EditInstructionDialog),
     editMode(editMode)
 {
     ui->setupUi(this);
+    ui->lineEdit->setMinimumWidth(400);
+    ui->instructionLabel->setWordWrap(true);
     setWindowFlags(windowFlags() & (~Qt::WindowContextHelpButtonHint));
 
     connect(ui->lineEdit, SIGNAL(textEdited(const QString &)), this,
@@ -25,15 +27,15 @@ void EditInstructionDialog::on_buttonBox_rejected()
     close();
 }
 
-QString EditInstructionDialog::getInstruction()
+QString EditInstructionDialog::getInstruction() const
 {
-    QString ret = ui->lineEdit->text();
-    return ret;
+    return ui->lineEdit->text();
 }
 
 void EditInstructionDialog::setInstruction(const QString &instruction)
 {
     ui->lineEdit->setText(instruction);
+    ui->lineEdit->selectAll();
     updatePreview(instruction);
 }
 
@@ -45,12 +47,14 @@ void EditInstructionDialog::updatePreview(const QString &input)
         ui->instructionLabel->setText("");
         return;
     } else if (editMode == EDIT_BYTES) {
-        result = Core()->disassemble(input).trimmed();
+        QByteArray data = CutterCore::hexStringToBytes(input);
+        result = Core()->disassemble(data).replace('\n', "; ");
     } else if (editMode == EDIT_TEXT) {
-        result = Core()->assemble(input).trimmed();
+        QByteArray data = Core()->assemble(input);
+        result = CutterCore::bytesToHexString(data).trimmed();
     }
 
-    if (result.isEmpty() || result.contains("\n")) {
+    if (result.isEmpty() || result.contains("invalid")) {
         ui->instructionLabel->setText("Unknown Instruction");
     } else {
         ui->instructionLabel->setText(result);

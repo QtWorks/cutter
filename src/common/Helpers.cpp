@@ -1,4 +1,5 @@
 #include "common/Helpers.h"
+#include "Configuration.h"
 
 #include <cmath>
 #include <QPlainTextEdit>
@@ -11,6 +12,8 @@
 #include <QAbstractItemView>
 #include <QAbstractButton>
 #include <QDockWidget>
+#include <QMenu>
+#include <QComboBox>
 
 static QAbstractItemView::ScrollMode scrollMode()
 {
@@ -21,16 +24,18 @@ static QAbstractItemView::ScrollMode scrollMode()
 
 namespace qhelpers {
 
-QString formatBytecount(const long bytecount)
+QString formatBytecount(const uint64_t bytecount)
 {
-    if (bytecount == 0)
+    if (bytecount == 0) {
         return "0";
-    const int exp = log(bytecount) / log(1000);
+    }
+
+    const int exp = log(bytecount) / log(1024);
     constexpr char suffixes[] = {' ', 'k', 'M', 'G', 'T', 'P', 'E'};
 
     QString str;
     QTextStream stream(&str);
-    stream << qSetRealNumberPrecision(3) << bytecount / pow(1000, exp)
+    stream << qSetRealNumberPrecision(3) << bytecount / pow(1024, exp)
            << ' ' << suffixes[exp] << 'B';
     return stream.readAll();
 }
@@ -70,6 +75,27 @@ QTreeWidgetItem *appendRow(QTreeWidget *tw, const QString &str, const QString &s
     tw->insertTopLevelItem(0, tempItem);
 
     return tempItem;
+}
+
+/**
+ * @brief Select first item of a QAbstractItemView if not empty
+ * @param itemView
+ * @return true if first item was selected
+ */
+bool selectFirstItem(QAbstractItemView *itemView)
+{
+    if (!itemView) {
+        return false;
+    }
+    auto model = itemView->model();
+    if (!model) {
+        return false;
+    }
+    if (model->hasIndex(0, 0)) {
+        itemView->setCurrentIndex(model->index(0, 0));
+        return true;
+    }
+    return false;
 }
 
 void setVerticalScrollMode(QAbstractItemView *tw)
@@ -182,5 +208,66 @@ QByteArray applyColorToSvg(const QString &filename, QColor color)
 
     return applyColorToSvg(file.readAll(), color);
 }
+
+/**
+ * @brief finds the theme-specific icon path and calls `setter` functor providing a pointer of an object which has to be used
+ * and loaded icon
+ * @param supportedIconsNames list of <object ptr, icon name>
+ * @param setter functor which has to be called
+ *   for example we need to set an action icon, the functor can be just [](void* o, const QIcon &icon) { static_cast<QAction*>(o)->setIcon(icon); }
+ */
+void setThemeIcons(QList<QPair<void *, QString>> supportedIconsNames,
+                   std::function<void(void *, const QIcon &)> setter)
+{
+    if (supportedIconsNames.isEmpty() || !setter) {
+        return;
+    }
+
+    const QString &iconsDirPath = QStringLiteral(":/img/icons/");
+    const QString &currTheme = Config()->getCurrentTheme()->name;
+    const QString &relativeThemeDir = currTheme.toLower() + "/";
+    QString iconPath;
+
+    foreach (const auto &p, supportedIconsNames) {
+        iconPath = iconsDirPath;
+        // Verify that indeed there is an alternative icon in this theme
+        // Otherwise, fallback to the regular icon folder
+        if (QFile::exists(iconPath + relativeThemeDir +  p.second)) {
+            iconPath += relativeThemeDir;
+        }
+        setter(p.first, QIcon(iconPath + p.second));
+    }
+}
+
+void prependQAction(QAction *action, QMenu *menu)
+{
+    auto actions = menu->actions();
+    if (actions.empty()) {
+        menu->addAction(action);
+    } else {
+        menu->insertAction(actions.first(), action);
+    }
+}
+
+qreal devicePixelRatio(const QPaintDevice *p)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+    return p->devicePixelRatioF();
+#else
+    return p->devicePixelRatio();
+#endif
+}
+
+void selectIndexByData(QComboBox *widget, QVariant data, int defaultIndex)
+{
+    for (int i = 0; i < widget->count(); i++) {
+        if (widget->itemData(i) == data) {
+            widget->setCurrentIndex(i);
+            return;
+        }
+    }
+    widget->setCurrentIndex(defaultIndex);
+}
+
 
 } // end namespace

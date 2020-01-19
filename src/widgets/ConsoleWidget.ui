@@ -40,8 +40,7 @@
       </property>
       <property name="font">
        <font>
-        <family>Monaco</family>
-        <pointsize>11</pointsize>
+        <family>Monospace</family>
        </font>
       </property>
       <property name="frameShape">
@@ -59,12 +58,15 @@
       <property name="plainText">
        <string/>
       </property>
+      <property name="textInteractionFlags">
+       <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+      </property>
      </widget>
     </item>
     <item>
-     <layout class="QHBoxLayout" name="horizontalLayout">
+     <layout class="QGridLayout" name="gridLayout">
       <property name="spacing">
-       <number>4</number>
+       <number>5</number>
       </property>
       <property name="leftMargin">
        <number>4</number>
@@ -78,8 +80,28 @@
       <property name="bottomMargin">
        <number>2</number>
       </property>
-      <item>
-       <widget class="QLineEdit" name="inputLineEdit">
+      <item row="0" column="0">
+       <widget class="DirectionalComboBox" name="inputCombo">
+        <property name="sizeAdjustPolicy">
+         <enum>QComboBox::AdjustToContents</enum>
+        </property>
+        <property name="visible">
+            <bool>false</bool>
+        </property>
+        <item>
+         <property name="text">
+          <string>R2 Console</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Debugee Input</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="r2InputLineEdit">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
           <horstretch>0</horstretch>
@@ -97,7 +119,29 @@
         </property>
        </widget>
       </item>
-      <item>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="debugeeInputLineEdit">
+        <property name="visible">
+            <bool>false</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="frame">
+         <bool>false</bool>
+        </property>
+        <property name="placeholderText">
+         <string> Enter input for the debugee</string>
+        </property>
+        <property name="clearButtonEnabled">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
        <widget class="QToolButton" name="execButton">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -109,36 +153,20 @@
          <string>Execute command</string>
         </property>
         <property name="styleSheet">
-         <string notr="true">
-QToolButton { /* all types of tool button */
-    margin-bottom: 1px;
-    margin-top: 1px;
-    padding-left: 8px;
-    padding-right: 5px;
-    padding-top: 1px;
-    padding-bottom: 1px;
-  background-color: palette(light);
-    border-radius: 6px;
-    border-top: 2px solid palette(light);
-    border-bottom: 2px solid palette(light);
-    border-left: 2px solid palette(light);
-    border-right: 2px solid palette(light);
-}
-
-QToolButton:pressed {
-  background-color: palette(dark);
-    border-top: 2px solid palette(dark);
-    border-bottom: 2px solid palette(dark);
-    border-left: 2px solid palette(dark);
-    border-right: 2px solid palette(dark);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>...</string>
         </property>
         <property name="icon">
          <iconset resource="../resources.qrc">
-          <normaloff>:/img/icons/play.svg</normaloff>:/img/icons/play.svg</iconset>
+          <normaloff>:/img/icons/arrow_right.svg</normaloff>:/img/icons/arrow_right.svg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>24</width>
+          <height>16</height>
+         </size>
         </property>
        </widget>
       </item>
@@ -147,8 +175,17 @@ QToolButton:pressed {
    </layout>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>DirectionalComboBox</class>
+   <extends>QComboBox</extends>
+   <header>common/DirectionalComboBox.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources>
   <include location="../resources.qrc"/>
  </resources>
  <connections/>
 </ui>
+

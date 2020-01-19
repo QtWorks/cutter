@@ -1,5 +1,6 @@
 #include "Omnibar.h"
-#include "MainWindow.h"
+#include "core/MainWindow.h"
+#include "CutterSeekable.h"
 
 #include <QStringListModel>
 #include <QCompleter>
@@ -50,6 +51,9 @@ void Omnibar::refresh(const QStringList &flagList)
 void Omnibar::restoreCompleter()
 {
     QCompleter *completer = this->completer();
+    if (!completer) {
+        return;
+    }
     completer->setFilterMode(Qt::MatchContains);
 }
 
@@ -66,7 +70,13 @@ void Omnibar::on_gotoEntry_returnPressed()
 {
     QString str = this->text();
     if (!str.isEmpty()) {
-        Core()->seek(str);
+        if (auto memoryWidget = main->getLastMemoryWidget()) {
+            RVA offset = Core()->math(str);
+            memoryWidget->getSeekable()->seek(offset);
+            memoryWidget->raiseMemoryWidget();
+        } else {
+            Core()->seekAndShow(str);
+        }
     }
 
     this->setText("");

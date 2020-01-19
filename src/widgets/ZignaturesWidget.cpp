@@ -1,6 +1,6 @@
 #include "ZignaturesWidget.h"
 #include "ui_ZignaturesWidget.h"
-#include "MainWindow.h"
+#include "core/MainWindow.h"
 #include "common/Helpers.h"
 
 ZignaturesModel::ZignaturesModel(QList<ZignatureDescription> *zignatures, QObject *parent)
@@ -48,7 +48,7 @@ QVariant ZignaturesModel::data(const QModelIndex &index, int role) const
                               "\n    Edges: " + RSizeString(zignature.edges) +
                               "\n    Ebbs: " + RSizeString(zignature.ebbs) +
                               "\n\nRefs:\n");
-        for (QString ref : zignature.refs) {
+        for (const QString &ref : zignature.refs) {
             tmp.append("\n    " + ref);
         }
         return tmp;
@@ -151,5 +151,5 @@ void ZignaturesWidget::on_zignaturesTreeView_doubleClicked(const QModelIndex &in
 {
     ZignatureDescription item = index.data(
                                     ZignaturesModel::ZignatureDescriptionRole).value<ZignatureDescription>();
-    Core()->seek(item.offset);
+    Core()->seekAndShow(item.offset);
 }

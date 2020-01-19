@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "Cutter.h"
+#include "core/Cutter.h"
 #include "CutterDockWidget.h"
 #include "CutterTreeWidget.h"
 
@@ -83,4 +83,6 @@ private:
     QAction *actionCopyRef;
     CutterTreeWidget *tree;
     void setScrollMode();
+
+    RefreshDeferrer *refreshDeferrer;
 };

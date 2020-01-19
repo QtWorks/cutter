@@ -10,11 +10,10 @@
 #include "common/Helpers.h"
 #include "common/Configuration.h"
 
-DebugOptionsWidget::DebugOptionsWidget(PreferencesDialog *dialog, QWidget *parent)
-    : QDialog(parent),
+DebugOptionsWidget::DebugOptionsWidget(PreferencesDialog *dialog)
+    : QDialog(dialog),
       ui(new Ui::DebugOptionsWidget)
 {
-    Q_UNUSED(dialog);
     ui->setupUi(this);
 
     updateDebugPlugin();
@@ -29,7 +28,7 @@ void DebugOptionsWidget::updateDebugPlugin()
                SLOT(on_pluginComboBox_currentIndexChanged(const QString &)));
 
     QStringList plugins = Core()->getDebugPlugins();
-    for (QString str : plugins)
+    for (const QString &str : plugins)
         ui->pluginComboBox->addItem(str);
 
     QString plugin = Core()->getActiveDebugPlugin();
@@ -37,11 +36,6 @@ void DebugOptionsWidget::updateDebugPlugin()
 
     connect(ui->pluginComboBox, SIGNAL(currentIndexChanged(const QString &)), this,
             SLOT(on_pluginComboBox_currentIndexChanged(const QString &)));
-
-    QString debugArgs = Core()->getConfig("dbg.args");
-    ui->debugArgs->setText(debugArgs);
-    ui->debugArgs->setPlaceholderText(debugArgs);
-    connect(ui->debugArgs, &QLineEdit::editingFinished, this, &DebugOptionsWidget::updateDebugArgs);
 
     QString stackSize = Core()->getConfig("esil.stack.size");
     ui->stackSize->setText(stackSize);
@@ -51,13 +45,6 @@ void DebugOptionsWidget::updateDebugPlugin()
     ui->stackAddr->setPlaceholderText(stackAddr);
     connect(ui->stackAddr, &QLineEdit::editingFinished, this, &DebugOptionsWidget::updateStackAddr);
     connect(ui->stackSize, &QLineEdit::editingFinished, this, &DebugOptionsWidget::updateStackSize);
-}
-
-void DebugOptionsWidget::updateDebugArgs()
-{
-    QString newArgs = ui->debugArgs->text();
-    Core()->setConfig("dbg.args", newArgs);
-    ui->debugArgs->setPlaceholderText(newArgs);
 }
 
 void DebugOptionsWidget::on_pluginComboBox_currentIndexChanged(const QString &plugin)

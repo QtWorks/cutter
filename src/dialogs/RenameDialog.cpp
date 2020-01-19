@@ -25,6 +25,7 @@ void RenameDialog::on_buttonBox_rejected()
 void RenameDialog::setName(QString fcnName)
 {
     ui->nameEdit->setText(fcnName);
+    ui->nameEdit->selectAll();
 }
 
 QString RenameDialog::getName() const
@@ -35,4 +36,15 @@ QString RenameDialog::getName() const
 void RenameDialog::setPlaceholderText(const QString &text)
 {
     ui->nameEdit->setPlaceholderText(text);
+}
+
+bool RenameDialog::showDialog(const QString &title, QString *name, const QString &placeholder, QWidget *parent)
+{
+    RenameDialog dialog(parent);
+    dialog.setWindowTitle(title);
+    dialog.setPlaceholderText(placeholder);
+    dialog.setName(*name);
+    int result = dialog.exec();
+    *name = dialog.getName();
+    return result == QDialog::DialogCode::Accepted;
 }

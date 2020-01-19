@@ -5,81 +5,53 @@
 #include <QShortcut>
 #include <QStringListModel>
 #include <QTimer>
+#include <QSettings>
+#include <QDir>
+#include <QUuid>
 #include <iostream>
-#include "Cutter.h"
+#include "core/Cutter.h"
 #include "ConsoleWidget.h"
 #include "ui_ConsoleWidget.h"
 #include "common/Helpers.h"
 #include "common/SvgIconEngine.h"
 
+#ifdef Q_OS_WIN
+#include <io.h>
+#define dup2 _dup2
+#define dup _dup
+#define fileno _fileno
+#define fdopen _fdopen
+#define PIPE_SIZE 65536 // Match Linux size
+#define PIPE_NAME "\\\\.\\pipe\\cutteroutput-%1"
+#else
+#include <unistd.h>
+#define PIPE_READ  (0)
+#define PIPE_WRITE (1)
+#define STDIN_PIPE_NAME "%1/cutter-stdin-%2"
+#endif
 
-// TODO: Find a way to get to this without copying it here
-// source: libr/core/core.c:585..
-// remark: u.* is missing
-static const QStringList radareArgs( {
-    "?", "?v", "whereis", "which", "ls", "rm", "mkdir", "pwd", "cat", "less",
-    "dH", "ds", "dso", "dsl", "dc", "dd", "dm", "db ", "db-",
-    "dp", "dr", "dcu", "dmd", "dmp", "dml",
-    "ec", "ecs", "eco",
-    "S", "S.", "S*", "S-", "S=", "Sa", "Sa-", "Sd", "Sl", "SSj", "Sr",
-    "s", "s+", "s++", "s-", "s--", "s*", "sa", "sb", "sr",
-    "!", "!!",
-    "#sha1", "#crc32", "#pcprint", "#sha256", "#sha512", "#md4", "#md5",
-    "#!python", "#!perl", "#!vala",
-    "V", "v",
-    "aa", "ab", "af", "ar", "ag", "at", "a?", "ax", "ad",
-    "ae", "aec", "aex", "aep", "aea", "aeA", "aes", "aeso", "aesu", "aesue", "aer", "aei", "aeim", "aef",
-    "aaa", "aac", "aae", "aai", "aar", "aan", "aas", "aat", "aap", "aav",
-    "af", "afa", "afan", "afc", "afC", "afi", "afb", "afbb", "afn", "afr", "afs", "af*", "afv", "afvn",
-    "aga", "agc", "agd", "agl", "agfl",
-    // see forbbidenArgs
-    //"e", "et", "e-", "e*", "e!", "e?", "env ",
-    "i", "ii", "iI", "is", "iS", "iz",
-    "q", "q!",
-    "f", "fl", "fr", "f-", "f*", "fs", "fS", "fr", "fo", "f?",
-    "m", "m*", "ml", "m-", "my", "mg", "md", "mp", "m?",
-    "o", "o+", "oc", "on", "op", "o-", "x", "wf", "wF", "wta", "wtf", "wp",
-    "t", "to", "t-", "tf", "td", "td-", "tb", "tn", "te", "tl", "tk", "ts", "tu",
-    "(", "(*", "(-", "()", ".", ".!", ".(", "./",
-    "r", "r+", "r-",
-    "b", "bf", "b?",
-    "/", "//", "/a", "/c", "/h", "/m", "/x", "/v", "/v2", "/v4", "/v8", "/r", "/re",
-    "y", "yy", "y?",
-    "wx", "ww", "w?", "wxf",
-    "p6d", "p6e", "p8", "pb", "pc",
-    "pd", "pda", "pdb", "pdc", "pdj", "pdr", "pdf", "pdi", "pdl", "pds", "pdt",
-    "pD", "px", "pX", "po", "pf", "pf.", "pf*", "pf*.", "pfd", "pfd.", "pv", "p=", "p-",
-    "pfj", "pfj.", "pfv", "pfv.",
-    "pm", "pr", "pt", "ptd", "ptn", "pt?", "ps", "pz", "pu", "pU", "p?",
-    "z", "z*", "zj", "z-", "z-*",
-    "za", "zaf", "zaF",
-    "zo", "zoz", "zos",
-    "zfd", "zfs", "zfz",
-    "z/", "z/*",
-    "zc",
-    "zs", "zs+", "zs-", "zs-*", "zsr",
-    "#!pipe"
-});
-
+#define CONSOLE_R2_INPUT ("R2 Console")
+#define CONSOLE_DEBUGEE_INPUT ("Debugee Input")
 
 static const int invalidHistoryPos = -1;
 
-
+static const char *consoleWrapSettingsKey = "console.wrap";
 
 ConsoleWidget::ConsoleWidget(MainWindow *main, QAction *action) :
     CutterDockWidget(main, action),
     ui(new Ui::ConsoleWidget),
     debugOutputEnabled(true),
     maxHistoryEntries(100),
-    lastHistoryPosition(invalidHistoryPos)
+    lastHistoryPosition(invalidHistoryPos),
+    completer(nullptr),
+    historyUpShortcut(nullptr),
+    historyDownShortcut(nullptr)
 {
     ui->setupUi(this);
 
     // Adjust console lineedit
-    ui->inputLineEdit->setTextMargins(10, 0, 0, 0);
-
-    ui->execButton->setIcon(QIcon(new SvgIconEngine(QString(":/img/icons/arrow_right.svg"),
-                                                    palette().buttonText().color())));
+    ui->r2InputLineEdit->setTextMargins(10, 0, 0, 0);
+    ui->debugeeInputLineEdit->setTextMargins(10, 0, 0, 0);
 
     setupFont();
 
@@ -91,37 +63,99 @@ ConsoleWidget::ConsoleWidget(MainWindow *main, QAction *action) :
     connect(actionClear, SIGNAL(triggered(bool)), ui->outputTextEdit, SLOT(clear()));
     actions.append(actionClear);
 
+    actionWrapLines = new QAction(tr("Wrap Lines"), ui->outputTextEdit);
+    actionWrapLines->setCheckable(true);
+    setWrap(QSettings().value(consoleWrapSettingsKey, true).toBool());
+    connect(actionWrapLines, &QAction::triggered, this, [this] (bool checked) {
+        setWrap(checked);
+    });
+    actions.append(actionWrapLines);
+
     // Completion
-    QCompleter *completer = new QCompleter(radareArgs, this);
+    completionActive = false;
+    completer = new QCompleter(&completionModel, this);
     completer->setMaxVisibleItems(20);
     completer->setCaseSensitivity(Qt::CaseInsensitive);
     completer->setFilterMode(Qt::MatchStartsWith);
+    ui->r2InputLineEdit->setCompleter(completer);
 
-    ui->inputLineEdit->setCompleter(completer);
+    connect(ui->r2InputLineEdit, &QLineEdit::textEdited, this, &ConsoleWidget::updateCompletion);
+    updateCompletion();
 
     // Set console output context menu
     ui->outputTextEdit->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->outputTextEdit, SIGNAL(customContextMenuRequested(const QPoint &)),
             this, SLOT(showCustomContextMenu(const QPoint &)));
 
-    // Esc clears inputLineEdit (like OmniBar)
-    QShortcut *clear_shortcut = new QShortcut(QKeySequence(Qt::Key_Escape), ui->inputLineEdit);
-    connect(clear_shortcut, SIGNAL(activated()), this, SLOT(clear()));
-    clear_shortcut->setContext(Qt::WidgetShortcut);
+    // Esc clears r2InputLineEdit and debugeeInputLineEdit (like OmniBar)
+    QShortcut *r2_clear_shortcut = new QShortcut(QKeySequence(Qt::Key_Escape), ui->r2InputLineEdit);
+    connect(r2_clear_shortcut, SIGNAL(activated()), this, SLOT(clear()));
+    r2_clear_shortcut->setContext(Qt::WidgetShortcut);
+
+    QShortcut *debugee_clear_shortcut = new QShortcut(QKeySequence(Qt::Key_Escape), ui->debugeeInputLineEdit);
+    connect(debugee_clear_shortcut, SIGNAL(activated()), this, SLOT(clear()));
+    debugee_clear_shortcut->setContext(Qt::WidgetShortcut);
 
     // Up and down arrows show history
-    QShortcut *historyOnUp = new QShortcut(QKeySequence(Qt::Key_Up), ui->inputLineEdit);
-    connect(historyOnUp, SIGNAL(activated()), this, SLOT(historyPrev()));
-    historyOnUp->setContext(Qt::WidgetShortcut);
+    historyUpShortcut = new QShortcut(QKeySequence(Qt::Key_Up), ui->r2InputLineEdit);
+    connect(historyUpShortcut, SIGNAL(activated()), this, SLOT(historyPrev()));
+    historyUpShortcut->setContext(Qt::WidgetShortcut);
 
-    QShortcut *historyOnDown = new QShortcut(QKeySequence(Qt::Key_Down), ui->inputLineEdit);
-    connect(historyOnDown, SIGNAL(activated()), this, SLOT(historyNext()));
-    historyOnDown->setContext(Qt::WidgetShortcut);
+    historyDownShortcut = new QShortcut(QKeySequence(Qt::Key_Down), ui->r2InputLineEdit);
+    connect(historyDownShortcut, SIGNAL(activated()), this, SLOT(historyNext()));
+    historyDownShortcut->setContext(Qt::WidgetShortcut);
 
-    connect(Config(), SIGNAL(fontsUpdated()), this, SLOT(setupFont()));
+    QShortcut *completionShortcut = new QShortcut(QKeySequence(Qt::Key_Tab), ui->r2InputLineEdit);
+    connect(completionShortcut, &QShortcut::activated, this, &ConsoleWidget::triggerCompletion);
+
+    connect(ui->r2InputLineEdit, &QLineEdit::editingFinished, this, &ConsoleWidget::disableCompletion);
+
+    connect(Config(), &Configuration::fontsUpdated, this, &ConsoleWidget::setupFont);
+
+    connect(ui->inputCombo,
+            static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this, &ConsoleWidget::onIndexChange);
+
+    connect(Core(), &CutterCore::debugTaskStateChanged, this, [ = ]() {
+        if (Core()->isRedirectableDebugee()) {
+            ui->inputCombo->setVisible(true);
+        } else {
+            ui->inputCombo->setVisible(false);
+            // Return to the r2 console
+            ui->inputCombo->setCurrentIndex(ui->inputCombo->findText(CONSOLE_R2_INPUT));
+        }
+    });
+
+    completer->popup()->installEventFilter(this);
+
+    redirectOutput();
 }
 
-ConsoleWidget::~ConsoleWidget() {}
+ConsoleWidget::~ConsoleWidget()
+{
+    delete completer;
+
+#ifndef Q_OS_WIN
+    ::close(stdinFile);
+    remove(stdinFifoPath.toStdString().c_str());
+#endif
+}
+
+bool ConsoleWidget::eventFilter(QObject *obj, QEvent *event)
+{
+    if(completer && obj == completer->popup() &&
+        // disable up/down shortcuts if completer is shown
+        (event->type() == QEvent::Type::Show || event->type() == QEvent::Type::Hide)) {
+        bool enabled = !completer->popup()->isVisible();
+        if (historyUpShortcut) {
+            historyUpShortcut->setEnabled(enabled);
+        }
+        if (historyDownShortcut) {
+            historyDownShortcut->setEnabled(enabled);
+        }
+    }
+    return false;
+}
 
 void ConsoleWidget::setupFont()
 {
@@ -144,7 +178,7 @@ void ConsoleWidget::addDebugOutput(const QString &msg)
 
 void ConsoleWidget::focusInputLineEdit()
 {
-    ui->inputLineEdit->setFocus();
+    ui->r2InputLineEdit->setFocus();
 }
 
 void ConsoleWidget::removeLastLine()
@@ -164,58 +198,93 @@ void ConsoleWidget::executeCommand(const QString &command)
     if (!commandTask.isNull()) {
         return;
     }
-    ui->inputLineEdit->setEnabled(false);
+    ui->r2InputLineEdit->setEnabled(false);
 
-    const int originalLines = ui->outputTextEdit->blockCount();
-    QTimer *timer = new QTimer(this);
-    timer->setInterval(500);
-    timer->setSingleShot(true);
-    connect(timer, &QTimer::timeout, [this]() {
-        ui->outputTextEdit->appendPlainText("Executing the command...");
-    });
+    QString cmd_line = "[" + RAddressString(Core()->getOffset()) + "]> " + command;
+    addOutput(cmd_line);
 
-    QString cmd_line = "<br>[" + RAddressString(Core()->getOffset()) + "]> " + command + "<br>";
     RVA oldOffset = Core()->getOffset();
     commandTask = QSharedPointer<CommandTask>(new CommandTask(command, CommandTask::ColorMode::MODE_256, true));
     connect(commandTask.data(), &CommandTask::finished, this, [this, cmd_line,
-          command, originalLines, oldOffset] (const QString & result) {
+          command, oldOffset] (const QString & result) {
 
-        if (originalLines < ui->outputTextEdit->blockCount()) {
-            removeLastLine();
-        }
-        ui->outputTextEdit->appendHtml(cmd_line + result);
+        ui->outputTextEdit->appendHtml(result);
         scrollOutputToEnd();
         historyAdd(command);
-        commandTask = nullptr;
-        ui->inputLineEdit->setEnabled(true);
-        ui->inputLineEdit->setFocus();
+        commandTask.clear();
+        ui->r2InputLineEdit->setEnabled(true);
+        ui->r2InputLineEdit->setFocus();
+
         if (oldOffset != Core()->getOffset()) {
             Core()->updateSeek();
         }
     });
-    connect(commandTask.data(), &CommandTask::finished, timer, &QTimer::stop);
 
-    timer->start();
     Core()->getAsyncTaskManager()->start(commandTask);
 }
 
-void ConsoleWidget::on_inputLineEdit_returnPressed()
+void ConsoleWidget::sendToStdin(const QString &input)
 {
-    QString input = ui->inputLineEdit->text();
+#ifndef Q_OS_WIN
+    write(stdinFile, (input + "\n").toStdString().c_str(), input.size() + 1);
+    fsync(stdinFile);
+    addOutput("Sent input: '" + input + "'");
+#else
+    // Stdin redirection isn't currently available in windows because console applications
+    // with stdin already get their own console window with stdin when they are launched
+    // that the user can type into.
+    addOutput("Unsupported feature");
+#endif
+}
+
+void ConsoleWidget::onIndexChange()
+{
+    QString console = ui->inputCombo->currentText();
+    if (console == CONSOLE_DEBUGEE_INPUT) {
+        ui->r2InputLineEdit->setVisible(false);
+        ui->debugeeInputLineEdit->setVisible(true);
+    } else if (console == CONSOLE_R2_INPUT) {
+        ui->r2InputLineEdit->setVisible(true);
+        ui->debugeeInputLineEdit->setVisible(false);
+    }
+}
+
+void ConsoleWidget::setWrap(bool wrap)
+{
+    QSettings().setValue(consoleWrapSettingsKey, wrap);
+    actionWrapLines->setChecked(wrap);
+    ui->outputTextEdit->setLineWrapMode(wrap ? QPlainTextEdit::WidgetWidth: QPlainTextEdit::NoWrap);
+}
+
+void ConsoleWidget::on_r2InputLineEdit_returnPressed()
+{
+    QString input = ui->r2InputLineEdit->text();
     if (input.isEmpty()) {
         return;
     }
     executeCommand(input);
-    ui->inputLineEdit->clear();
+    ui->r2InputLineEdit->clear();
+}
+
+void ConsoleWidget::on_debugeeInputLineEdit_returnPressed()
+{
+    QString input = ui->debugeeInputLineEdit->text();
+    if (input.isEmpty()) {
+        return;
+    }
+    sendToStdin(input);
+    ui->debugeeInputLineEdit->clear();
 }
 
 void ConsoleWidget::on_execButton_clicked()
 {
-    on_inputLineEdit_returnPressed();
+    on_r2InputLineEdit_returnPressed();
 }
 
 void ConsoleWidget::showCustomContextMenu(const QPoint &pt)
 {
+    actionWrapLines->setChecked(ui->outputTextEdit->lineWrapMode() == QPlainTextEdit::WidgetWidth);
+
     QMenu *menu = new QMenu(ui->outputTextEdit);
     menu->addActions(actions);
     menu->exec(ui->outputTextEdit->mapToGlobal(pt));
@@ -233,9 +302,9 @@ void ConsoleWidget::historyNext()
             --lastHistoryPosition;
 
             if (lastHistoryPosition >= 0) {
-                ui->inputLineEdit->setText(history.at(lastHistoryPosition));
+                ui->r2InputLineEdit->setText(history.at(lastHistoryPosition));
             } else {
-                ui->inputLineEdit->clear();
+                ui->r2InputLineEdit->clear();
             }
 
 
@@ -250,19 +319,60 @@ void ConsoleWidget::historyPrev()
             lastHistoryPosition = history.size() - 2;
         }
 
-        ui->inputLineEdit->setText(history.at(++lastHistoryPosition));
+        ui->r2InputLineEdit->setText(history.at(++lastHistoryPosition));
     }
+}
+
+void ConsoleWidget::triggerCompletion()
+{
+    if (completionActive) {
+        return;
+    }
+    completionActive = true;
+    updateCompletion();
+    completer->complete();
+}
+
+void ConsoleWidget::disableCompletion()
+{
+    if (!completionActive) {
+        return;
+    }
+    completionActive = false;
+    updateCompletion();
+    completer->popup()->hide();
+}
+
+void ConsoleWidget::updateCompletion()
+{
+    if (!completionActive) {
+        completionModel.setStringList({});
+        return;
+    }
+
+    auto current = ui->r2InputLineEdit->text();
+    auto completions = Core()->autocomplete(current, R_LINE_PROMPT_DEFAULT);
+    int lastSpace = current.lastIndexOf(' ');
+    if (lastSpace >= 0) {
+        current = current.left(lastSpace + 1);
+        for (auto &s : completions) {
+            s = current + s;
+        }
+    }
+    completionModel.setStringList(completions);
 }
 
 void ConsoleWidget::clear()
 {
-    ui->inputLineEdit->clear();
+    disableCompletion();
+    ui->r2InputLineEdit->clear();
+    ui->debugeeInputLineEdit->clear();
 
     invalidateHistoryPosition();
 
     // Close the potential shown completer popup
-    ui->inputLineEdit->clearFocus();
-    ui->inputLineEdit->setFocus();
+    ui->r2InputLineEdit->clearFocus();
+    ui->r2InputLineEdit->setFocus();
 }
 
 void ConsoleWidget::scrollOutputToEnd()
@@ -284,4 +394,70 @@ void ConsoleWidget::historyAdd(const QString &input)
 void ConsoleWidget::invalidateHistoryPosition()
 {
     lastHistoryPosition = invalidHistoryPos;
+}
+
+void ConsoleWidget::processQueuedOutput()
+{
+    // Partial lines are ignored since carriage return is currently unsupported
+    while (pipeSocket->canReadLine()) {
+        QString output = QString(pipeSocket->readLine());
+
+        fprintf(origStderr, "%s", output.toStdString().c_str());
+
+        // Get the last segment that wasn't overwritten by carriage return
+        output = output.trimmed();
+        output = output.remove(0, output.lastIndexOf('\r')).trimmed();
+        ui->outputTextEdit->appendHtml(CutterCore::ansiEscapeToHtml(output));
+        scrollOutputToEnd();
+    }
+}
+
+void ConsoleWidget::redirectOutput()
+{
+    // Make sure that we are running in a valid console with initialized output handles
+    if (0 > fileno(stderr) && 0 > fileno(stdout)) {
+        addOutput("Run cutter in a console to enable r2 output redirection into this widget.");
+        return;
+    }
+
+    pipeSocket = new QLocalSocket(this);
+
+    origStdin = fdopen(dup(fileno(stderr)), "r");
+    origStderr = fdopen(dup(fileno(stderr)), "a");
+    origStdout = fdopen(dup(fileno(stdout)), "a");
+#ifdef Q_OS_WIN
+    QString pipeName = QString::fromLatin1(PIPE_NAME).arg(QUuid::createUuid().toString());
+
+    SECURITY_ATTRIBUTES attributes = {sizeof(SECURITY_ATTRIBUTES), 0, false};
+    hWrite = CreateNamedPipeW((wchar_t *)pipeName.utf16(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+                              PIPE_TYPE_BYTE | PIPE_WAIT, 1, PIPE_SIZE, PIPE_SIZE, 0, &attributes);
+
+    int writeFd = _open_osfhandle((intptr_t)hWrite, _O_WRONLY | _O_TEXT);
+    dup2(writeFd, fileno(stdout));
+    dup2(writeFd, fileno(stderr));
+
+    pipeSocket->connectToServer(pipeName, QIODevice::ReadOnly);
+#else
+    pipe(redirectPipeFds);
+    stdinFifoPath = QString(STDIN_PIPE_NAME).arg(QDir::tempPath(), QUuid::createUuid().toString());
+    mkfifo(stdinFifoPath.toStdString().c_str(), (mode_t) 0777);
+    stdinFile = open(stdinFifoPath.toStdString().c_str(), O_RDWR | O_ASYNC);
+
+    dup2(stdinFile, fileno(stdin));
+    dup2(redirectPipeFds[PIPE_WRITE], fileno(stderr));
+    dup2(redirectPipeFds[PIPE_WRITE], fileno(stdout));
+
+    // Attempt to force line buffering to avoid calling processQueuedOutput
+    // for partial lines
+    setlinebuf(stderr);
+    setlinebuf(stdout);
+
+    // Configure the pipe to work in async mode
+    fcntl(redirectPipeFds[PIPE_READ], F_SETFL, O_ASYNC | O_NONBLOCK);
+
+    pipeSocket->setSocketDescriptor(redirectPipeFds[PIPE_READ]);
+    pipeSocket->connectToServer(QIODevice::ReadOnly);
+#endif
+
+    connect(pipeSocket, SIGNAL(readyRead()), this, SLOT(processQueuedOutput()));
 }

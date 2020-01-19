@@ -2,7 +2,6 @@ import argparse
 import importlib.util
 import logging
 import os
-import pprint
 import subprocess
 import sys
 
@@ -47,9 +46,8 @@ def win_dist(args):
 def build(args):
     cutter_builddir = os.path.join(ROOT, args.dir)
     if not os.path.exists(cutter_builddir):
-        defines = []
-        defines.append('-Denable_jupyter=%s' % str(args.jupyter).lower())
-        defines.append('-Denable_webengine=%s' % str(args.webengine).lower())
+        defines = ['-Denable_python=%s' % str(args.python).lower(),
+                   '-Denable_python_bindings=%s' % str(args.python_bindings).lower()]
         if os.name == 'nt':
             defines.append('-Dradare2:r2_incdir=radare2/include')
             defines.append('-Dradare2:r2_libdir=radare2/lib')
@@ -74,10 +72,10 @@ def main():
                         default='ninja', help='Choose build backend')
     parser.add_argument('--dir', default='build',
                         help='Destination build directory')
-    parser.add_argument('--jupyter', action='store_true',
-                        help='Enable Jupyter support')
-    parser.add_argument('--webengine', action='store_true',
-                        help='Enable QtWebEngine support')
+    parser.add_argument('--python', action='store_true',
+                        help='Enable Python support')
+    parser.add_argument('--python-bindings', action='store_true',
+                        help='Enable Python Bindings')
     parser.add_argument('--release', action='store_true',
                         help='Set the build as Release (remove debug info)')
     parser.add_argument('--nobuild', action='store_true',

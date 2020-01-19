@@ -5,25 +5,102 @@
 #include <QFontDatabase>
 #include <QFile>
 #include <QApplication>
+#include <QLibraryInfo>
 
-#include "common/ColorSchemeFileSaver.h"
+#ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
+#include <KSyntaxHighlighting/repository.h>
+#include <KSyntaxHighlighting/theme.h>
+#include <KSyntaxHighlighting/definition.h>
+#endif
 
-const QList<CutterQtTheme> kCutterQtThemesList = {
-    { "Default", LightFlag },
-    { "Dark",    DarkFlag }
+#include "common/ColorThemeWorker.h"
+#include "common/SyntaxHighlighter.h"
+
+/* Map with names of themes associated with its color palette
+ * (Dark or Light), so for dark interface themes will be shown only Dark color themes
+ * and for light - only light ones.
+ */
+const QHash<QString, ColorFlags> Configuration::relevantThemes = {
+    { "ayu", DarkFlag },
+    { "consonance", DarkFlag },
+    { "darkda", DarkFlag },
+    { "onedark", DarkFlag },
+    { "solarized", DarkFlag },
+    { "zenburn", DarkFlag },
+    { "cutter", LightFlag },
+    { "dark", LightFlag },
+    { "matrix", LightFlag },
+    { "tango", LightFlag },
+    { "white", LightFlag }
+};
+
+const QHash<QString, QHash<ColorFlags, QColor>> Configuration::cutterOptionColors = {
+    { "gui.cflow",                 { { DarkFlag,  QColor(0xff, 0xff, 0xff) },
+                                     { LightFlag, QColor(0x00, 0x00, 0x00) }} },
+    { "gui.dataoffset",            { { DarkFlag,  QColor(0xff, 0xff, 0xff) },
+                                     { LightFlag, QColor(0x00, 0x00, 0x00) }} },
+    { "gui.imports",               { { DarkFlag,  QColor(0x32, 0x8c, 0xff) },
+                                     { LightFlag, QColor(0x32, 0x8c, 0xff) }} },
+    { "gui.item_invalid",          { { DarkFlag,  QColor(0x9b, 0x9b, 0x9b) },
+                                     { LightFlag, QColor(0x9b, 0x9b, 0x9b) }} },
+    { "gui.main",                  { { DarkFlag,  QColor(0x00, 0x80, 0x00) },
+                                     { LightFlag, QColor(0x00, 0x80, 0x00) }} },
+    { "gui.item_unsafe",           { { DarkFlag,  QColor(0xff, 0x81, 0x7b) },
+                                     { LightFlag, QColor(0xff, 0x81, 0x7b) }} },
+    { "gui.navbar.seek",           { { DarkFlag,  QColor(0xe9, 0x56, 0x56) },
+                                     { LightFlag, QColor(0xff, 0x00, 0x00) }} },
+    { "gui.navbar.pc",             { { DarkFlag,  QColor(0x42, 0xee, 0xf4) },
+                                     { LightFlag, QColor(0x42, 0xee, 0xf4) }} },
+    { "gui.navbar.code",           { { DarkFlag,  QColor(0x82, 0xc8, 0x6f) },
+                                     { LightFlag, QColor(0x68, 0xe5, 0x45) }} },
+    { "gui.navbar.str",            { { DarkFlag,  QColor(0x6f, 0x86, 0xd8) },
+                                     { LightFlag, QColor(0x45, 0x68, 0xe5) }} },
+    { "gui.navbar.sym",            { { DarkFlag,  QColor(0xdd, 0xa3, 0x68) },
+                                     { LightFlag, QColor(0xe5, 0x96, 0x45) }} },
+    { "gui.navbar.empty",          { { DarkFlag,  QColor(0x64, 0x64, 0x64) },
+                                     { LightFlag, QColor(0xdc, 0xec, 0xf5) }} },
+    { "gui.breakpoint_background", { { DarkFlag,  QColor(0x8c, 0x4c, 0x4c) },
+                                     { LightFlag, QColor(0xe9, 0x8f, 0x8f) }} },
+    { "gui.overview.node",         { { DarkFlag,  QColor(0x64, 0x64, 0x64) },
+                                     { LightFlag, QColor(0xf5, 0xfa, 0xff) }} },
+    { "gui.tooltip.background",    { { DarkFlag,  QColor(0x2a, 0x2c, 0x2e) },
+                                     { LightFlag, QColor(0xfa, 0xfc, 0xfe) }} },
+    { "gui.tooltip.foreground",    { { DarkFlag,  QColor(0xfa, 0xfc, 0xfe) },
+                                     { LightFlag, QColor(0x2a, 0x2c, 0x2e) }} },
+    { "gui.border",                { { DarkFlag,  QColor(0x64, 0x64, 0x64) },
+                                     { LightFlag, QColor(0x91, 0xc8, 0xfa) }} },
+    { "gui.background",            { { DarkFlag,  QColor(0x25, 0x28, 0x2b) },
+                                     { LightFlag, QColor(0xff, 0xff, 0xff) }} },
+    { "gui.alt_background",        { { DarkFlag,  QColor(0x1c, 0x1f, 0x24) },
+                                     { LightFlag, QColor(0xf5, 0xfa, 0xff) }} },
+    { "gui.disass_selected",       { { DarkFlag,  QColor(0x1f, 0x22, 0x28) },
+                                     { LightFlag, QColor(0xff, 0xff, 0xff) }} },
+    { "lineHighlight",             { { DarkFlag,  QColor(0x15, 0x1d, 0x1d, 0x96) },
+                                     { LightFlag, QColor(0xd2, 0xd2, 0xff, 0x96) }} },
+    { "wordHighlight",             { { DarkFlag,  QColor(0x34, 0x3a, 0x47, 0xff) },
+                                     { LightFlag, QColor(0xb3, 0x77, 0xd6, 0x3c) }} },
+    { "highlightPC",               { { DarkFlag,  QColor(0x57, 0x1a, 0x07) },
+                                     { LightFlag, QColor(0xd6, 0xff, 0xd2) }} },
+    { "gui.overview.fill",         { { DarkFlag,  QColor(0xff, 0xff, 0xff, 0x28) },
+                                     { LightFlag, QColor(0xaf, 0xd9, 0xea, 0x41) }} },
+    { "gui.overview.border",       { { DarkFlag,  QColor(0x63, 0xda, 0xe8, 0x32) },
+                                     { LightFlag, QColor(0x63, 0xda, 0xe8, 0x32) }} },
+    { "gui.navbar.err",            { { DarkFlag,  QColor(0x03, 0xaa, 0xf5) },
+                                     { LightFlag, QColor(0x03, 0xaa, 0xf5) }} }
 };
 
 Configuration *Configuration::mPtr = nullptr;
 
-/*!
- * \brief All asm.* options saved as settings. Values are the default values.
+/**
+ * @brief All asm.* options saved as settings. Values are the default values.
  */
 static const QHash<QString, QVariant> asmOptions = {
     { "asm.esil",           false },
     { "asm.pseudo",         false },
     { "asm.offset",         true },
+    { "asm.xrefs",          false },
+    { "asm.indent",         false },
     { "asm.describe",       false },
-    { "asm.stackptr",       false },
     { "asm.slow",           true },
     { "asm.lines",          true },
     { "asm.lines.fcn",      true },
@@ -39,22 +116,32 @@ static const QHash<QString, QVariant> asmOptions = {
     { "asm.nbytes",         10 },
     { "asm.syntax",         "intel" },
     { "asm.ucase",          false },
-    { "asm.bbline",         false },
+    { "asm.bb.line",        false },
     { "asm.capitalize",     false },
     { "asm.var.sub",        true },
     { "asm.var.subonly",    true },
-    { "asm.tabs",           5 },
+    { "asm.tabs",           8 },
     { "asm.tabs.off",       5 },
     { "asm.marks",          false },
-    { "esil.breakoninvalid",   true },
+    { "asm.refptr",         false },
+    { "esil.breakoninvalid",true },
     { "graph.offset",       false}
 };
 
 
-Configuration::Configuration() : QObject()
+Configuration::Configuration() : QObject(), nativePalette(qApp->palette())
 {
     mPtr = this;
-    loadInitial();
+    if (!s.isWritable()) {
+        QMessageBox::critical(nullptr,
+                              tr("Critical!"),
+                              tr("!!! Settings are not writable! Make sure you have a write access to \"%1\"")
+                              .arg(s.fileName())
+                             );
+    }
+#ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
+    kSyntaxHighlightingRepository = nullptr;
+#endif
 }
 
 Configuration *Configuration::instance()
@@ -66,15 +153,19 @@ Configuration *Configuration::instance()
 
 void Configuration::loadInitial()
 {
-    setTheme(getTheme());
-    setColorTheme(getCurrentTheme());
+    setInterfaceTheme(getInterfaceTheme());
+    setColorTheme(getColorTheme());
     applySavedAsmOptions();
+
+#ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
+    kSyntaxHighlightingRepository = new KSyntaxHighlighting::Repository();
+#endif
 }
 
 QString Configuration::getDirProjects()
 {
     auto projectsDir = s.value("dir.projects").toString();
-    if (projectsDir == "") {
+    if (projectsDir.isEmpty()) {
         projectsDir = Core()->getConfig("dir.projects");
         setDirProjects(projectsDir);
     }
@@ -85,6 +176,18 @@ QString Configuration::getDirProjects()
 void Configuration::setDirProjects(const QString &dir)
 {
     s.setValue("dir.projects", QDir::toNativeSeparators(dir));
+}
+
+QString Configuration::getRecentFolder()
+{
+    QString recentFolder = s.value("dir.recentFolder", QDir::homePath()).toString();
+
+    return QDir::toNativeSeparators(recentFolder);
+}
+
+void Configuration::setRecentFolder(const QString &dir)
+{
+    s.setValue("dir.recentFolder", QDir::toNativeSeparators(dir));
 }
 
 /**
@@ -115,55 +218,122 @@ void Configuration::resetAll()
     emit fontsUpdated();
 }
 
+bool Configuration::getAutoUpdateEnabled() const
+{
+    return s.value("autoUpdateEnabled", false).toBool();
+}
+
+void Configuration::setAutoUpdateEnabled(bool au)
+{
+    s.setValue("autoUpdateEnabled", au);
+}
+
+/**
+ * @brief get the current Locale set in Cutter's user configuration
+ * @return a QLocale object describes user's current locale
+ */
 QLocale Configuration::getCurrLocale() const
 {
     return s.value("locale", QLocale().system()).toLocale();
 }
 
+/**
+ * @brief sets Cutter's locale
+ * @param l - a QLocale object describes the locate to configure
+ */
 void Configuration::setLocale(const QLocale &l)
 {
     s.setValue("locale", l);
 }
 
-void Configuration::loadDefaultTheme()
+/**
+ * @brief set Cutter's interface language by a given locale name
+ * @param language - a string represents the name of a locale language
+ * @return true on success
+ */
+bool Configuration::setLocaleByName(const QString &language)
 {
-    /* Load Qt Theme */
-    qApp->setStyleSheet("");
+    const auto &allLocales = QLocale::matchingLocales(QLocale::AnyLanguage, QLocale::AnyScript,
+                                                      QLocale::AnyCountry);
 
-    /* Images */
-    logoFile = QString(":/img/cutter_plain.svg");
-
-    /* Colors */
-    // GUI
-    setColor("gui.cflow",   QColor(0, 0, 0));
-    setColor("gui.dataoffset", QColor(0, 0, 0));
-    setColor("gui.border",  QColor(0, 0, 0));
-    setColor("highlight",   QColor(210, 210, 255, 150));
-    setColor("highlightWord", QColor(210, 210, 255));
-    // RIP line selection in debug
-    setColor("highlightPC", QColor(214, 255, 210));
-    // Windows background
-    setColor("gui.background", QColor(255, 255, 255));
-    setColor("gui.disass_selected", QColor(255, 255, 255));
-    // Disassembly nodes background
-    setColor("gui.alt_background", QColor(245, 250, 255));
-    // Custom
-    setColor("gui.imports", QColor(50, 140, 255));
-    setColor("gui.main", QColor(0, 128, 0));
-    setColor("gui.navbar.err", QColor(255, 0, 0));
-    setColor("gui.navbar.code", QColor(104, 229, 69));
-    setColor("gui.navbar.str", QColor(69, 104, 229));
-    setColor("gui.navbar.sym", QColor(229, 150, 69));
-    setColor("gui.navbar.empty", QColor(100, 100, 100));
-    setColor("gui.breakpoint_background", QColor(233, 143, 143));
+    for (auto &it : allLocales) {
+        if (QString::compare(it.nativeLanguageName(), language, Qt::CaseInsensitive) == 0) {
+            setLocale(it);
+            return true;
+        }
+    }
+    return false;
 }
 
-void Configuration::loadBaseDark()
+bool Configuration::windowColorIsDark()
+{
+    ColorFlags currentThemeColorFlags = getCurrentTheme()->flag;
+    if (currentThemeColorFlags == ColorFlags::LightFlag) {
+        return false;
+    } else if (currentThemeColorFlags == ColorFlags::DarkFlag) {
+        return true;
+    }
+    return nativeWindowIsDark();
+}
+
+bool Configuration::nativeWindowIsDark()
+{
+    const QPalette &palette = qApp->palette();
+    auto windowColor = palette.color(QPalette::Window).toRgb();
+    return (windowColor.red() + windowColor.green() + windowColor.blue()) < 382;
+}
+
+void Configuration::loadNativeStylesheet()
+{
+    /* Load Qt Theme */
+    QFile f(":native/native.qss");
+    if (!f.exists()) {
+        qWarning() << "Can't find Native theme stylesheet.";
+    } else {
+        f.open(QFile::ReadOnly | QFile::Text);
+        QTextStream ts(&f);
+        QString stylesheet = ts.readAll();
+        qApp->setStyleSheet(stylesheet);
+    }
+
+    qApp->setPalette(nativePalette);
+    /* Some widgets does not change its palette when QApplication changes one
+     * so this loop force all widgets do this, but all widgets take palette from
+     * QApplication::palette() when they are created so line above is necessary too.
+     */
+    for (auto widget : qApp->allWidgets()) {
+        widget->setPalette(nativePalette);
+    }
+}
+
+/**
+ * @brief Loads the Light theme of Cutter and modify special theme colors
+ */
+void Configuration::loadLightStylesheet()
+{
+    /* Load Qt Theme */
+    QFile f(":lightstyle/light.qss");
+    if (!f.exists()) {
+        qWarning() << "Can't find Light theme stylesheet.";
+    } else {
+        f.open(QFile::ReadOnly | QFile::Text);
+        QTextStream ts(&f);
+        QString stylesheet = ts.readAll();
+
+        QPalette p = qApp->palette();
+        p.setColor(QPalette::Text, Qt::black);
+        qApp->setPalette(p);
+
+        qApp->setStyleSheet(stylesheet);
+    }
+}
+
+void Configuration::loadDarkStylesheet()
 {
     /* Load Qt Theme */
     QFile f(":qdarkstyle/style.qss");
     if (!f.exists()) {
-        qWarning() << "Can't find dark theme stylesheet.";
+        qWarning() << "Can't find Dark theme stylesheet.";
     } else {
         f.open(QFile::ReadOnly | QFile::Text);
         QTextStream ts(&f);
@@ -177,52 +347,43 @@ void Configuration::loadBaseDark()
                       "    height: 12px;"
                       "}";
 #endif
+        QPalette p = qApp->palette();
+        p.setColor(QPalette::Text, Qt::white);
+        qApp->setPalette(p);
         qApp->setStyleSheet(stylesheet);
     }
-
-    /* Images */
-    logoFile = QString(":/img/cutter_white_plain.svg");
-
-    /* Colors */
-    // GUI
-    setColor("gui.cflow",   QColor(255, 255, 255));
-    setColor("gui.dataoffset", QColor(255, 255, 255));
-    // Custom
-    setColor("gui.imports", QColor(50, 140, 255));
-    setColor("gui.main", QColor(0, 128, 0));
-
-    // GUI: navbar
-    setColor("gui.navbar.err", QColor(233, 86, 86));
-    setColor("gui.navbar.code", QColor(130, 200, 111));
-    setColor("angui.navbar.str", QColor(111, 134, 216));
-    setColor("gui.navbar.sym", QColor(221, 163, 104));
-    setColor("gui.navbar.empty", QColor(100, 100, 100));
-
-    // RIP line selection in debug
-    setColor("highlightPC", QColor(87, 26, 7));
-    setColor("gui.breakpoint_background", QColor(140, 76, 76));
 }
 
-void Configuration::loadDarkTheme()
+void Configuration::loadMidnightStylesheet()
 {
-    loadBaseDark();
-    setColor("gui.border",  QColor(100, 100, 100));
-    // Windows background
-    setColor("gui.background", QColor(37, 40, 43));
-    // Disassembly nodes background
-    setColor("gui.alt_background", QColor(28, 31, 36));
-    // Disassembly nodes background when selected
-    setColor("gui.disass_selected", QColor(31, 34, 40));
-    // Disassembly line selected
-    setColor("highlight", QColor(21, 29, 29, 150));
-    setColor("highlightWord", QColor(100, 100, 100));
+    /* Load Qt Theme */
+    QFile f(":midnight/style.css");
+    if (!f.exists()) {
+        qWarning() << "Can't find Midnight theme stylesheet.";
+    } else {
+        f.open(QFile::ReadOnly | QFile::Text);
+        QTextStream ts(&f);
+        QString stylesheet = ts.readAll();
 
+        QPalette p = qApp->palette();
+        p.setColor(QPalette::Text, Qt::white);
+        qApp->setPalette(p);
+
+        qApp->setStyleSheet(stylesheet);
+    }
+}
+
+const QFont Configuration::getBaseFont() const
+{
+    QFont font = s.value("font", QFont("Inconsolata", 11)).value<QFont>();
+    return font;
 }
 
 const QFont Configuration::getFont() const
 {
-    QFont font = s.value("font", QFont("Inconsolata", 11)).value<QFont>();
-    return font;
+  QFont font = getBaseFont();
+  font.setPointSizeF(font.pointSizeF() * getZoomFactor());
+  return font;
 }
 
 void Configuration::setFont(const QFont &font)
@@ -231,51 +392,123 @@ void Configuration::setFont(const QFont &font)
     emit fontsUpdated();
 }
 
-QString Configuration::getLastThemeOf(const CutterQtTheme &currQtTheme) const
+void Configuration::refreshFont()
 {
-    return s.value("lastThemeOf." + currQtTheme.name,
-                   Config()->getCurrentTheme()).toString();
+    emit fontsUpdated();
 }
 
-void Configuration::setTheme(int theme)
+qreal Configuration::getZoomFactor() const {
+  qreal fontZoom = s.value("zoomFactor", 1.0).value<qreal>();
+  return qMax(fontZoom, 0.1);
+}
+
+void Configuration::setZoomFactor(qreal zoom) {
+  s.setValue("zoomFactor", qMax(zoom, 0.1));
+  emit fontsUpdated();
+}
+
+QString Configuration::getLastThemeOf(const CutterInterfaceTheme &currInterfaceTheme) const
 {
-    if (theme >= kCutterQtThemesList.size() ||
-        theme < 0) {
+    return s.value("lastThemeOf." + currInterfaceTheme.name,
+                   Config()->getColorTheme()).toString();
+}
+
+void Configuration::setInterfaceTheme(int theme)
+{
+    if (theme >= cutterInterfaceThemesList().size() ||
+            theme < 0) {
         theme = 0;
     }
     s.setValue("ColorPalette", theme);
-    QString themeName = kCutterQtThemesList[theme].name;
 
-    if (themeName == "Default") {
-        loadDefaultTheme();
-    } else if (themeName == "Dark") {
-        loadDarkTheme();
+    CutterInterfaceTheme interfaceTheme = cutterInterfaceThemesList()[theme];
+
+    if (interfaceTheme.name == "Native") {
+        loadNativeStylesheet();
+    } else if (interfaceTheme.name == "Dark") {
+        loadDarkStylesheet();
+    } else if (interfaceTheme.name == "Midnight") {
+        loadMidnightStylesheet();
+    } else if (interfaceTheme.name == "Light") {
+        loadLightStylesheet();
     } else {
-        loadDefaultTheme();
+        loadNativeStylesheet();
     }
 
+    for (auto it = cutterOptionColors.cbegin(); it != cutterOptionColors.cend(); it++) {
+        setColor(it.key(), it.value()[interfaceTheme.flag]);
+    }
+
+    emit interfaceThemeChanged();
     emit colorsUpdated();
+#ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
+    emit kSyntaxHighlightingThemeChanged();
+#endif
 }
 
+const CutterInterfaceTheme *Configuration::getCurrentTheme()
+{
+    int i = getInterfaceTheme();
+    if (i < 0 || i >= cutterInterfaceThemesList().size()) {
+        i = 0;
+        setInterfaceTheme(i);
+    }
+    return &cutterInterfaceThemesList()[i];
+}
+
+#ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
+KSyntaxHighlighting::Repository *Configuration::getKSyntaxHighlightingRepository()
+{
+    return kSyntaxHighlightingRepository;
+}
+
+KSyntaxHighlighting::Theme Configuration::getKSyntaxHighlightingTheme()
+{
+    auto repo = getKSyntaxHighlightingRepository();
+    if (!repo) {
+        return KSyntaxHighlighting::Theme();
+    }
+    return repo->defaultTheme(
+        getCurrentTheme()->flag & DarkFlag
+        ? KSyntaxHighlighting::Repository::DefaultTheme::DarkTheme
+        : KSyntaxHighlighting::Repository::DefaultTheme::LightTheme);
+}
+#endif
+
+QSyntaxHighlighter *Configuration::createSyntaxHighlighter(QTextDocument *document)
+{
+#ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
+    auto syntaxHighlighter = new SyntaxHighlighter(document);
+    auto repo = getKSyntaxHighlightingRepository();
+    if (repo) {
+        syntaxHighlighter->setDefinition(repo->definitionForName("C"));
+    }
+    return syntaxHighlighter;
+#else
+    return new FallbackSyntaxHighlighter(document);
+#endif
+}
 
 QString Configuration::getLogoFile()
 {
-    return logoFile;
+    return windowColorIsDark()
+           ? QString(":/img/cutter_white_plain.svg")
+           : QString(":/img/cutter_plain.svg");
 }
 
-/*!
- * \brief Configuration::setColor sets the local Cutter configuration color
- * \param name Color Name
- * \param color The color you want to set
+/**
+ * @brief Configuration::setColor sets the local Cutter configuration color
+ * @param name Color Name
+ * @param color The color you want to set
  */
 void Configuration::setColor(const QString &name, const QColor &color)
 {
     s.setValue("colors." + name, color);
 }
 
-void Configuration::setLastThemeOf(const CutterQtTheme &currQtTheme, const QString &theme)
+void Configuration::setLastThemeOf(const CutterInterfaceTheme &currInterfaceTheme, const QString &theme)
 {
-    s.setValue("lastThemeOf." + currQtTheme.name, theme);
+    s.setValue("lastThemeOf." + currInterfaceTheme.name, theme);
 }
 
 const QColor Configuration::getColor(const QString &name) const
@@ -287,34 +520,23 @@ const QColor Configuration::getColor(const QString &name) const
     }
 }
 
-void Configuration::setColorTheme(QString theme)
+void Configuration::setColorTheme(const QString &theme)
 {
     if (theme == "default") {
         Core()->cmd("ecd");
         s.setValue("theme", "default");
     } else {
-        Core()->cmd(QString("eco %1").arg(theme));
+        Core()->cmd(QStringLiteral("eco %1").arg(theme));
         s.setValue("theme", theme);
     }
-    // Duplicate interesting colors into our Cutter Settings
-    // Dirty fix for arrow colors, TODO refactor getColor, setColor, etc.
-    QJsonDocument colors = Core()->cmdj("ecj");
-    QJsonObject colorsObject = colors.object();
-    QJsonObject::iterator it;
-    for (it = colorsObject.begin(); it != colorsObject.end(); it++) {
+
+    QJsonObject colorTheme = ThemeWorker().getTheme(theme).object();
+    for (auto it = colorTheme.constBegin(); it != colorTheme.constEnd(); it++) {
         QJsonArray rgb = it.value().toArray();
-        if (rgb.size() != 3) {
+        if (rgb.size() != 4) {
             continue;
         }
-        s.setValue("colors." + it.key(), QColor(rgb[0].toInt(), rgb[1].toInt(), rgb[2].toInt()));
-    }
-
-    QMap<QString, QColor> cutterSpecific = ColorSchemeFileWorker().getCutterSpecific();
-    for (auto &it : cutterSpecific.keys())
-        setColor(it, cutterSpecific[it]);
-
-    if (!ColorSchemeFileWorker().isCustomScheme(theme)) {
-        setTheme(getTheme());
+        setColor(it.key(), QColor(rgb[0].toInt(), rgb[1].toInt(), rgb[2].toInt(), rgb[3].toInt()));
     }
 
     emit colorsUpdated();
@@ -322,16 +544,27 @@ void Configuration::setColorTheme(QString theme)
 
 void Configuration::resetToDefaultAsmOptions()
 {
-    for (auto it = asmOptions.begin(); it != asmOptions.end(); it++) {
+    for (auto it = asmOptions.cbegin(); it != asmOptions.cend(); it++) {
         setConfig(it.key(), it.value());
     }
 }
 
 void Configuration::applySavedAsmOptions()
 {
-    for (auto it = asmOptions.begin(); it != asmOptions.end(); it++) {
+    for (auto it = asmOptions.cbegin(); it != asmOptions.cend(); it++) {
         Core()->setConfig(it.key(), s.value(it.key(), it.value()));
     }
+}
+
+const QList<CutterInterfaceTheme>& Configuration::cutterInterfaceThemesList()
+{
+    static const QList<CutterInterfaceTheme> list = {
+        { "Native", Configuration::nativeWindowIsDark() ? DarkFlag : LightFlag },
+        { "Dark",   DarkFlag },
+        { "Midnight", DarkFlag },
+        { "Light",  LightFlag }
+    };
+    return list;
 }
 
 QVariant Configuration::getConfigVar(const QString &key)
@@ -379,4 +612,97 @@ void Configuration::setConfig(const QString &key, const QVariant &value)
     }
 
     Core()->setConfig(key, value);
+}
+
+/**
+ * @brief this function will gather and return available translation for Cutter
+ * @return a list of all available translations
+ */
+QStringList Configuration::getAvailableTranslations()
+{
+    const auto &trDirs = getTranslationsDirectories();
+
+    QSet<QString> fileNamesSet;
+    for (const auto &trDir : trDirs) {
+        QDir dir(trDir);
+        if (!dir.exists()) {
+            continue;
+        }
+        const QStringList &currTrFileNames = dir.entryList(QStringList("cutter_*.qm"), QDir::Files,
+                                                           QDir::Name);
+        for (const auto &trFile : currTrFileNames) {
+            fileNamesSet << trFile;
+        }
+    }
+
+    QStringList fileNames = fileNamesSet.toList();
+    std::sort(fileNames.begin(), fileNames.end());
+    QStringList languages;
+    QString currLanguageName;
+    auto allLocales = QLocale::matchingLocales(QLocale::AnyLanguage, QLocale::AnyScript,
+                                               QLocale::AnyCountry);
+
+    for (auto i : fileNames) {
+        QString localeName = i.mid(sizeof("cutter_") - 1, 2);
+        for (auto j : allLocales) {
+            if (j.name().startsWith(localeName)) {
+                currLanguageName = j.nativeLanguageName();
+                currLanguageName = currLanguageName.at(0).toUpper() +
+                                   currLanguageName.right(currLanguageName.length() - 1);
+                languages << currLanguageName;
+                break;
+            }
+        }
+    }
+    return languages << QLatin1String("English");
+}
+
+/**
+ * @brief check if this is the first time Cutter's is executed on this computer
+ * @return true if this is first execution; otherwise returns false.
+ */
+bool Configuration::isFirstExecution()
+{
+    // check if a variable named firstExecution existed in the configuration
+    if (s.contains("firstExecution")) {
+        return false;
+    } else {
+        s.setValue("firstExecution", false);
+        return true;
+    }
+}
+
+QStringList Configuration::getTranslationsDirectories() const
+{
+    static const QString cutterTranslationPath = QCoreApplication::applicationDirPath() +
+                                                 QDir::separator()
+                                                 + QLatin1String("translations");
+
+    return {
+        cutterTranslationPath,
+        QLibraryInfo::location(QLibraryInfo::TranslationsPath),
+#ifdef Q_OS_MAC
+        QStringLiteral("%1/../Resources/translations").arg(QCoreApplication::applicationDirPath()),
+#endif // Q_OS_MAC
+    };
+}
+
+QString Configuration::getSelectedDecompiler()
+{
+    return s.value("selectedDecompiler").toString();
+}
+
+void Configuration::setSelectedDecompiler(const QString &id)
+{
+    s.setValue("selectedDecompiler", id);
+}
+
+bool Configuration::getDecompilerAutoRefreshEnabled()
+{
+    return s.value("decompilerAutoRefresh", true).toBool();
+}
+
+void Configuration::setDecompilerAutoRefreshEnabled(bool enabled)
+{
+    s.setValue("decompilerAutoRefresh", enabled);
 }

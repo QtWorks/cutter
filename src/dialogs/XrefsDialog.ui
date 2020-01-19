@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>700</width>
-    <height>350</height>
+    <width>1131</width>
+    <height>567</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -50,9 +50,9 @@
         </widget>
        </item>
        <item>
-        <widget class="QTreeWidget" name="toTreeWidget">
+        <widget class="AddressableItemList&lt;&gt;" name="toTreeWidget">
          <property name="frameShape">
-          <enum>QFrame::NoFrame</enum>
+          <enum>QFrame::Box</enum>
          </property>
          <property name="frameShadow">
           <enum>QFrame::Plain</enum>
@@ -60,24 +60,6 @@
          <property name="indentation">
           <number>5</number>
          </property>
-         <property name="columnCount">
-          <number>3</number>
-         </property>
-         <column>
-          <property name="text">
-           <string>Address</string>
-          </property>
-         </column>
-         <column>
-          <property name="text">
-           <string>Code</string>
-          </property>
-         </column>
-         <column>
-          <property name="text">
-           <string>Type</string>
-          </property>
-         </column>
         </widget>
        </item>
        <item>
@@ -88,9 +70,9 @@
         </widget>
        </item>
        <item>
-        <widget class="QTreeWidget" name="fromTreeWidget">
+        <widget class="AddressableItemList&lt;&gt;" name="fromTreeWidget">
          <property name="frameShape">
-          <enum>QFrame::NoFrame</enum>
+          <enum>QFrame::Box</enum>
          </property>
          <property name="frameShadow">
           <enum>QFrame::Plain</enum>
@@ -98,24 +80,6 @@
          <property name="indentation">
           <number>5</number>
          </property>
-         <property name="columnCount">
-          <number>3</number>
-         </property>
-         <column>
-          <property name="text">
-           <string>Address</string>
-          </property>
-         </column>
-         <column>
-          <property name="text">
-           <string>Code</string>
-          </property>
-         </column>
-         <column>
-          <property name="text">
-           <string>Type</string>
-          </property>
-         </column>
         </widget>
        </item>
       </layout>
@@ -131,12 +95,6 @@
        </item>
        <item>
         <widget class="QPlainTextEdit" name="previewTextEdit">
-         <property name="font">
-          <font>
-           <family>Anonymous Pro</family>
-           <pointsize>13</pointsize>
-          </font>
-         </property>
          <property name="frameShape">
           <enum>QFrame::NoFrame</enum>
          </property>
@@ -176,6 +134,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>AddressableItemList&lt;&gt;</class>
+   <extends>QTreeView</extends>
+   <header>widgets/AddressableItemList.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections>
   <connection>

@@ -1,7 +1,7 @@
 #include "EntrypointWidget.h"
 #include "ui_EntrypointWidget.h"
 
-#include "MainWindow.h"
+#include "core/MainWindow.h"
 #include "common/Helpers.h"
 
 #include <QTreeWidget>
@@ -20,7 +20,8 @@ EntrypointWidget::EntrypointWidget(MainWindow *main, QAction *action) :
 
     setScrollMode();
 
-    connect(Core(), SIGNAL(refreshAll()), this, SLOT(fillEntrypoint()));
+    connect(Core(), &CutterCore::codeRebased, this, &EntrypointWidget::fillEntrypoint);
+    connect(Core(), &CutterCore::refreshAll, this, &EntrypointWidget::fillEntrypoint);
 }
 
 EntrypointWidget::~EntrypointWidget() {}
@@ -28,7 +29,7 @@ EntrypointWidget::~EntrypointWidget() {}
 void EntrypointWidget::fillEntrypoint()
 {
     ui->entrypointTreeWidget->clear();
-    for (auto i : Core()->getAllEntrypoint()) {
+    for (const EntrypointDescription &i : Core()->getAllEntrypoint()) {
         QTreeWidgetItem *item = new QTreeWidgetItem();
         item->setText(0, RAddressString(i.vaddr));
         item->setText(1, i.type);
@@ -51,5 +52,5 @@ void EntrypointWidget::on_entrypointTreeWidget_itemDoubleClicked(QTreeWidgetItem
         return;
 
     EntrypointDescription ep = item->data(0, Qt::UserRole).value<EntrypointDescription>();
-    Core()->seek(ep.vaddr);
+    Core()->seekAndShow(ep.vaddr);
 }

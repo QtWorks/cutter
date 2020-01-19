@@ -4,25 +4,29 @@
 #include <memory>
 #include <map>
 
+#include <QtWidgets/QToolButton>
 #include <QAbstractListModel>
 #include <QSortFilterProxyModel>
 #include <QGraphicsScene>
 #include <QLabel>
 #include <QHash>
 
-#include "Cutter.h"
+#include "core/Cutter.h"
 #include "CutterDockWidget.h"
+#include "widgets/ListDockWidget.h"
 
-class CutterTreeView;
 class QAbstractItemView;
-class MainWindow;
 class SectionsWidget;
-class SectionAddrDock;
+class AbstractAddrDock;
+class AddrDockScene;
+class QGraphicsSceneMouseEvent;
+class RawAddrDock;
+class VirtualAddrDock;
 class QuickFilterView;
 class QGraphicsView;
 class QGraphicsRectItem;
 
-class SectionsModel : public QAbstractListModel
+class SectionsModel : public AddressableItemModel<QAbstractListModel>
 {
     Q_OBJECT
 
@@ -32,7 +36,7 @@ private:
     QList<SectionDescription> *sections;
 
 public:
-    enum Column { NameColumn = 0, SizeColumn, AddressColumn, EndAddressColumn, EntropyColumn, ColumnCount };
+    enum Column { NameColumn = 0, SizeColumn, AddressColumn, EndAddressColumn, PermissionsColumn, EntropyColumn, ColumnCount };
     enum Role { SectionDescriptionRole = Qt::UserRole };
 
     SectionsModel(QList<SectionDescription> *sections, QObject *parent = nullptr);
@@ -42,9 +46,12 @@ public:
 
     QVariant data(const QModelIndex &index, int role) const;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const;
+
+    RVA address(const QModelIndex &index) const override;
+    QString name(const QModelIndex &index) const override;
 };
 
-class SectionsProxyModel : public QSortFilterProxyModel
+class SectionsProxyModel : public AddressableFilterProxyModel
 {
     Q_OBJECT
 
@@ -55,7 +62,7 @@ protected:
     bool lessThan(const QModelIndex &left, const QModelIndex &right) const override;
 };
 
-class SectionsWidget : public CutterDockWidget
+class SectionsWidget : public ListDockWidget
 {
     Q_OBJECT
 
@@ -65,51 +72,130 @@ public:
 
 private slots:
     void refreshSections();
-    void onSectionsDoubleClicked(const QModelIndex &index);
-    void onSectionsSeekChanged(RVA addr);
+    void refreshDocks();
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     QList<SectionDescription> sections;
     SectionsModel *sectionsModel;
     SectionsProxyModel *proxyModel;
-    CutterTreeView *sectionsTable;
-    MainWindow *main;
-    QWidget *dockWidgetContents;
-    QuickFilterView *quickFilterView;
 
-    SectionAddrDock *rawAddrDock;
-    SectionAddrDock *virtualAddrDock;
+    QWidget *addrDockWidget;
+    RawAddrDock *rawAddrDock;
+    VirtualAddrDock *virtualAddrDock;
+    QToolButton *toggleButton;
 
-    int indicatorWidth;
-    int indicatorHeight;
-    int indicatorParamPosY;
+    /**
+     * RefreshDeferrer for loading the section data
+     */
+    RefreshDeferrer *sectionsRefreshDeferrer;
+
+    /**
+     * RefreshDeferrer for updating the visualization docks
+     */
+    RefreshDeferrer *dockRefreshDeferrer;
+
+    void initSectionsTable();
+    void initQuickFilter();
+    void initConnects();
+    void initAddrMapDocks();
     void drawIndicatorOnAddrDocks();
-    void updateIndicator(SectionAddrDock *targetDock, QString name, float ratio);
+    void updateToggle();
 };
 
-class SectionAddrDock : public QDockWidget
+class AbstractAddrDock : public QDockWidget
 {
     Q_OBJECT
 
     friend SectionsWidget;
 
-private slots:
-    void updateDock();
-    void addTextItem(QColor color, QPoint pos, QString string);
+public:
+    explicit AbstractAddrDock(SectionsModel *model, QWidget *parent = nullptr);
+    ~AbstractAddrDock();
 
-private:
-    enum AddrType { Raw = 0, Virtual };
-    int heightThreshold;
+    virtual void updateDock();
+
+protected:
+    int indicatorHeight;
+    int indicatorParamPosY;
+    float heightThreshold;
+    float heightDivisor;
     int rectOffset;
-    int rectWidth;
+    int rectWidthMin;
+    int rectWidthMax;
     QColor indicatorColor;
-    explicit SectionAddrDock(SectionsModel *model, AddrType type, QWidget *parent = nullptr);
-    QGraphicsScene *graphicsScene;
+    QColor textColor;
+    AddrDockScene *addrDockScene;
     QGraphicsView *graphicsView;
     SectionsProxyModel *proxyModel;
-    AddrType addrType;
+
+    void addTextItem(QColor color, QPoint pos, QString string);
+    int getAdjustedSize(int size, int validMinSize);
+    int getRectWidth();
+    int getIndicatorWidth();
+    int getValidMinSize();
+
+    virtual RVA getSizeOfSection(const SectionDescription &section) =0;
+    virtual RVA getAddressOfSection(const SectionDescription &section) =0;
+
+private:
+    void drawIndicator(QString name, float ratio);
+};
+
+class AddrDockScene : public QGraphicsScene
+{
+    Q_OBJECT
+
+public:
+    explicit AddrDockScene(QWidget *parent = nullptr);
+    ~AddrDockScene();
+
+    bool disableCenterOn;
+
+    QHash<QString, RVA> nameAddrMap;
+    QHash<QString, RVA> nameAddrSizeMap;
+    QHash<QString, RVA> seekAddrMap;
+    QHash<QString, RVA> seekAddrSizeMap;
     QHash<QString, int> namePosYMap;
     QHash<QString, int> nameHeightMap;
+
+protected:
+    void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
+
+private:
+    RVA getAddrFromPos(int posY, bool seek);
+};
+
+class RawAddrDock : public AbstractAddrDock
+{
+    Q_OBJECT
+
+public:
+    explicit RawAddrDock(SectionsModel *model, QWidget *parent = nullptr);
+    ~RawAddrDock() = default;
+
+    void updateDock() override;
+
+protected:
+    RVA getSizeOfSection(const SectionDescription &section) override { return section.size; };
+    RVA getAddressOfSection(const SectionDescription &section) override { return section.paddr; };
+};
+
+class VirtualAddrDock : public AbstractAddrDock
+{
+    Q_OBJECT
+
+public:
+    explicit VirtualAddrDock(SectionsModel *model, QWidget *parent = nullptr);
+    ~VirtualAddrDock() = default;
+
+    void updateDock() override;
+
+protected:
+    RVA getSizeOfSection(const SectionDescription &section) override { return section.vsize; };
+    RVA getAddressOfSection(const SectionDescription &section) override { return section.vaddr; };
 };
 
 #endif // SECTIONSWIDGET_H

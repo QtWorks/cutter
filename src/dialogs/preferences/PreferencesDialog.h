@@ -2,12 +2,13 @@
 #ifndef PREFERENCESDIALOG_H
 #define PREFERENCESDIALOG_H
 
+#include "core/Cutter.h"
+
 #include <QDialog>
-#include <QPushButton>
-#include <QTreeWidget>
+
 #include <memory>
 
-#include "Cutter.h"
+class QTreeWidgetItem;
 
 namespace Ui {
 class PreferencesDialog;
@@ -30,6 +31,7 @@ public slots:
 
 private:
     std::unique_ptr<Ui::PreferencesDialog> ui;
+    void chooseThemeIcons();
 };
 
 #endif //PREFERENCESDIALOG_H

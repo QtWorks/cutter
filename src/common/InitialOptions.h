@@ -2,7 +2,15 @@
 #ifndef CUTTER_INITIALOPTIONS_H
 #define CUTTER_INITIALOPTIONS_H
 
-#include "Cutter.h"
+#include "core/Cutter.h"
+
+/**
+ * @brief The CommandDescription struct is a pair of a radare2 command and its description
+ */
+struct CommandDescription {
+    QString command;
+    QString description;
+};
 
 struct InitialOptions
 {
@@ -29,10 +37,8 @@ struct InitialOptions
 
     QString pdbFile;
     QString script;
-
-    int bbsize = 0;
-
-    QList<QString> analCmd = { "aaa" };
+    
+    QList<CommandDescription> analCmd = { {"aaa", "Auto analysis"} };
 
     QString shellcode;
 };

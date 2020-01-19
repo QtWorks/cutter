@@ -1,20 +1,16 @@
-
-#include <QModelIndex>
-
 #include "StringsWidget.h"
 #include "ui_StringsWidget.h"
-
-#include "MainWindow.h"
+#include "core/MainWindow.h"
 #include "common/Helpers.h"
-#include "dialogs/XrefsDialog.h"
-
 #include "WidgetShortcuts.h"
 
-#include <QMenu>
 #include <QClipboard>
+#include <QMenu>
+#include <QModelIndex>
+#include <QShortcut>
 
 StringsModel::StringsModel(QList<StringDescription> *strings, QObject *parent)
-    : QAbstractListModel(parent),
+    : AddressableItemModel<QAbstractListModel>(parent),
       strings(strings)
 {
 }
@@ -46,9 +42,9 @@ QVariant StringsModel::data(const QModelIndex &index, int role) const
         case StringsModel::TypeColumn:
             return str.type.toUpper();
         case StringsModel::LengthColumn:
-            return str.length;
+            return QString::number(str.length);
         case StringsModel::SizeColumn:
-            return str.size;
+            return QString::number(str.size);
         case StringsModel::SectionColumn:
             return str.section;
         default:
@@ -86,10 +82,15 @@ QVariant StringsModel::headerData(int section, Qt::Orientation, int role) const
     }
 }
 
-StringsProxyModel::StringsProxyModel(StringsModel *sourceModel, QObject *parent)
-    : QSortFilterProxyModel(parent)
+RVA StringsModel::address(const QModelIndex &index) const
 {
-    setSourceModel(sourceModel);
+    const StringDescription &str = strings->at(index.row());
+    return str.vaddr;
+}
+
+StringsProxyModel::StringsProxyModel(StringsModel *sourceModel, QObject *parent)
+    : AddressableFilterProxyModel(sourceModel, parent)
+{
     setFilterCaseSensitivity(Qt::CaseInsensitive);
     setSortCaseSensitivity(Qt::CaseInsensitive);
 }
@@ -146,16 +147,12 @@ StringsWidget::StringsWidget(MainWindow *main, QAction *action) :
 
     // Shift-F12 to toggle strings window
     QShortcut *toggle_shortcut = new QShortcut(widgetShortcuts["StringsWidget"], main);
-    connect(toggle_shortcut, &QShortcut::activated, this, [=] (){ 
-            toggleDockWidget(true);
-            main->updateDockActionChecked(action);
-            } );
+    connect(toggle_shortcut, &QShortcut::activated, this, [ = ] () {
+        toggleDockWidget(true);
+        main->updateDockActionChecked(action);
+    } );
 
     connect(ui->actionCopy_String, SIGNAL(triggered()), this, SLOT(on_actionCopy()));
-    connect(ui->actionCopy_Address, SIGNAL(triggered()), this, SLOT(on_actionCopy()));
-
-    connect(ui->stringsTreeView, SIGNAL(customContextMenuRequested(const QPoint &)),
-            this, SLOT(showStringsContextMenu(const QPoint &)));
 
     ui->actionFilter->setShortcut(QKeySequence::Find);
 
@@ -163,8 +160,13 @@ StringsWidget::StringsWidget(MainWindow *main, QAction *action) :
 
     model = new StringsModel(&strings, this);
     proxyModel = new StringsProxyModel(model, this);
+    ui->stringsTreeView->setMainWindow(main);
     ui->stringsTreeView->setModel(proxyModel);
     ui->stringsTreeView->sortByColumn(StringsModel::OffsetColumn, Qt::AscendingOrder);
+
+    //
+    auto menu = ui->stringsTreeView->getItemContextMenu();
+    menu->addAction(ui->actionCopy_String);
 
     connect(ui->quickFilterView, SIGNAL(filterTextChanged(const QString &)), proxyModel,
             SLOT(setFilterWildcard(const QString &)));
@@ -172,8 +174,20 @@ StringsWidget::StringsWidget(MainWindow *main, QAction *action) :
     connect(ui->quickFilterView, &ComboQuickFilterView::filterTextChanged, this, [this] {
         tree->showItemsNumber(proxyModel->rowCount());
     });
-    
-    connect(Core(), SIGNAL(refreshAll()), this, SLOT(refreshStrings()));
+
+    QShortcut *searchShortcut = new QShortcut(QKeySequence::Find, this);
+    connect(searchShortcut, &QShortcut::activated, ui->quickFilterView, &ComboQuickFilterView::showFilter);
+    searchShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+
+    QShortcut *clearShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    connect(clearShortcut, &QShortcut::activated, this, [this]() {
+        ui->quickFilterView->clearFilter();
+        ui->stringsTreeView->setFocus();
+    });
+    clearShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+
+    connect(Core(), &CutterCore::refreshAll, this, &StringsWidget::refreshStrings);
+    connect(Core(), &CutterCore::codeRebased, this, &StringsWidget::refreshStrings);
 
     connect(
         ui->quickFilterView->comboBox(), &QComboBox::currentTextChanged, this,
@@ -186,16 +200,6 @@ StringsWidget::StringsWidget(MainWindow *main, QAction *action) :
 }
 
 StringsWidget::~StringsWidget() {}
-
-void StringsWidget::on_stringsTreeView_doubleClicked(const QModelIndex &index)
-{
-    if (!index.isValid()) {
-        return;
-    }
-
-    StringDescription str = index.data(StringsModel::StringDescriptionRole).value<StringDescription>();
-    Core()->seek(str.vaddr);
-}
 
 void StringsWidget::refreshStrings()
 {
@@ -218,7 +222,7 @@ void StringsWidget::refreshSectionCombo()
     combo->clear();
     combo->addItem(tr("(all)"));
 
-    for (QString &section : Core()->getSectionList()) {
+    for (const QString &section : Core()->getSectionList()) {
         combo->addItem(section, section);
     }
 
@@ -237,34 +241,7 @@ void StringsWidget::stringSearchFinished(const QList<StringDescription> &strings
 
     tree->showItemsNumber(proxyModel->rowCount());
 
-    task = nullptr;
-}
-
-void StringsWidget::showStringsContextMenu(const QPoint &pt)
-{
-    QMenu *menu = new QMenu(ui->stringsTreeView);
-
-    menu->clear();
-    menu->addAction(ui->actionCopy_String);
-    menu->addAction(ui->actionCopy_Address);
-    menu->addAction(ui->actionFilter);
-    menu->addSeparator();
-    menu->addAction(ui->actionX_refs);
-
-    menu->exec(ui->stringsTreeView->mapToGlobal(pt));
-
-    delete menu;
-}
-
-void StringsWidget::on_actionX_refs_triggered()
-{
-    StringDescription str = ui->stringsTreeView->selectionModel()->currentIndex().data(
-                StringsModel::StringDescriptionRole).value<StringDescription>();
-
-    XrefsDialog *x = new XrefsDialog(this);
-    x->fillRefsForAddress(str.vaddr, RAddressString(str.vaddr), false);
-    x->setAttribute(Qt::WA_DeleteOnClose);
-    x->exec();
+    task.clear();
 }
 
 void StringsWidget::on_actionCopy()
@@ -274,11 +251,7 @@ void StringsWidget::on_actionCopy()
 
     QModelIndex index;
 
-    if (sender() == ui->actionCopy_String) {
-        index = ui->stringsTreeView->model()->index(row, 1);
-    } else if (sender() == ui->actionCopy_Address) {
-        index = ui->stringsTreeView->model()->index(row, 0);
-    }
+    index = ui->stringsTreeView->model()->index(row, 1);
 
     QClipboard *clipboard = QApplication::clipboard();
     clipboard->setText(index.data().toString());

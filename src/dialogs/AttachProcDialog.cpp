@@ -1,5 +1,5 @@
-#include "MainWindow.h"
-#include "Cutter.h"
+#include "core/MainWindow.h"
+#include "core/Cutter.h"
 #include "AttachProcDialog.h"
 #include "ui_AttachProcDialog.h"
 
@@ -119,7 +119,7 @@ ProcessBeingAnalysedProxyModel::ProcessBeingAnalysedProxyModel(ProcessModel *sou
 QString ProcessBeingAnalysedProxyModel::processPathToFilename(const QString &path) const
 {
     // removes the arguments and gets filename from the process path
-    return path.split(" ").first().split("/").last();
+    return path.section(QLatin1Char(' '), 0, 0).section(QLatin1Char('/'), -1);
 }
 
 bool ProcessBeingAnalysedProxyModel::filterAcceptsRow(int row, const QModelIndex &parent) const

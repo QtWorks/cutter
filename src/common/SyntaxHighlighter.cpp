@@ -1,6 +1,28 @@
+
 #include "SyntaxHighlighter.h"
 
-SyntaxHighlighter::SyntaxHighlighter(QTextDocument *parent)
+#ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
+
+#include "Configuration.h"
+
+#include <KSyntaxHighlighting/theme.h>
+
+SyntaxHighlighter::SyntaxHighlighter(QTextDocument *document) : KSyntaxHighlighting::SyntaxHighlighter(document)
+{
+    connect(Config(), &Configuration::kSyntaxHighlightingThemeChanged, this, &SyntaxHighlighter::updateTheme);
+    updateTheme();
+}
+
+void SyntaxHighlighter::updateTheme()
+{
+    setTheme(Config()->getKSyntaxHighlightingTheme());
+    rehighlight();
+}
+
+#endif
+
+
+FallbackSyntaxHighlighter::FallbackSyntaxHighlighter(QTextDocument *parent)
     :   QSyntaxHighlighter(parent)
     ,   commentStartExpression("/\\*")
     ,   commentEndExpression("\\*/")
@@ -20,12 +42,9 @@ SyntaxHighlighter::SyntaxHighlighter(QTextDocument *parent)
                     << "\\bdefault\\b" << "\\bgoto\\b" << "\\bsizeof\\b"
                     << "\\bvolatile\\b" << "\\bdo\\b" << "\\bif\\b"
                     << "\\static\\b" << "\\while\\b";
-    //Special words
-    keywordPatterns << "\\bloc_*\\b" << "\\bsym.*\\b";
 
     QTextCharFormat keywordFormat;
-    keywordFormat.setForeground(Qt::red);
-    keywordFormat.setFontWeight(QFont::Bold);
+    keywordFormat.setForeground(QColor(80, 200, 215));
 
     for ( const auto &pattern : keywordPatterns ) {
         rule.pattern.setPattern(pattern);
@@ -58,7 +77,7 @@ SyntaxHighlighter::SyntaxHighlighter(QTextDocument *parent)
     multiLineCommentFormat.setForeground(Qt::gray);
 }
 
-void SyntaxHighlighter::highlightBlock(const QString &text)
+void FallbackSyntaxHighlighter::highlightBlock(const QString &text)
 {
     for ( const auto &it : highlightingRules ) {
         auto matchIterator = it.pattern.globalMatch(text);

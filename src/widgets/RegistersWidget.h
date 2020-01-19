@@ -6,8 +6,9 @@
 #include <QJsonObject>
 #include <memory>
 
-#include "Cutter.h"
+#include "core/Cutter.h"
 #include "CutterDockWidget.h"
+#include "menus/AddressableItemContextMenu.h"
 
 class MainWindow;
 
@@ -26,10 +27,13 @@ public:
 private slots:
     void updateContents();
     void setRegisterGrid();
+    void openContextMenu(QPoint point, QString address);
 
 private:
     std::unique_ptr<Ui::RegistersWidget> ui;
     QGridLayout *registerLayout = new QGridLayout;
+    AddressableItemContextMenu addressContextMenu;
     int numCols = 2;
     int registerLen = 0;
+    RefreshDeferrer *refreshDeferrer;
 };

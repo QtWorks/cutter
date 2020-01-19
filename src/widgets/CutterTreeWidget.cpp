@@ -1,5 +1,5 @@
 #include "CutterTreeWidget.h"
-#include "MainWindow.h"
+#include "core/MainWindow.h"
 
 CutterTreeWidget::CutterTreeWidget(QObject *parent) :
     QObject(parent),
@@ -21,6 +21,11 @@ void CutterTreeWidget::showItemsNumber(int count)
     if(bar){
         bar->showMessage(tr("%1 Items").arg(count));
     }
+}
+
+void CutterTreeWidget::showStatusBar(bool show)
+{
+    bar->setVisible(show);
 }
 
 CutterTreeWidget::~CutterTreeWidget() {}

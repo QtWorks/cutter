@@ -1,12 +1,12 @@
 #ifndef PYTHONAPI_H
 #define PYTHONAPI_H
 
-#ifdef CUTTER_ENABLE_JUPYTER
+#ifdef CUTTER_ENABLE_PYTHON
 
+#define Py_LIMITED_API 0x03050000
 #include <Python.h>
 
 PyObject *PyInit_api();
-PyObject *PyInit_api_internal();
 
 #endif
 

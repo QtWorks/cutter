@@ -2,7 +2,7 @@
 #ifndef R2TASK_H
 #define R2TASK_H
 
-#include "Cutter.h"
+#include "core/Cutter.h"
 
 class R2Task: public QObject
 {
@@ -15,6 +15,8 @@ private:
     void taskFinished();
 
 public:
+    using Ptr = QSharedPointer<R2Task>;
+
     explicit R2Task(const QString &cmd, bool transient = true);
     ~R2Task();
 
@@ -23,6 +25,7 @@ public:
     void joinTask();
 
     QString getResult();
+    QJsonDocument getResultJson();
     const char *getResultRaw();
 
 signals:
